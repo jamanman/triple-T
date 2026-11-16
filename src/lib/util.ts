@@ -23,9 +23,9 @@ export function initials(name: string): string {
   return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase()
 }
 
-/** Range uses Chebyshev distance: diagonals count as one square. */
-export function dist(a: Player, b: Player): number {
-  return Math.max(Math.abs(a.x! - b.x!), Math.abs(a.y! - b.y!))
+/** Range is counted in cardinal steps (Manhattan distance). */
+export function dist(a: Pick<Player, 'x' | 'y'>, b: Pick<Player, 'x' | 'y'>): number {
+  return Math.abs(a.x! - b.x!) + Math.abs(a.y! - b.y!)
 }
 
 export function countdown(to: string | null, now: number): string {

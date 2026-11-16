@@ -28,6 +28,13 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .muted { color: var(--muted); }
 .small { font-size: 0.82rem; }
 .error { color: var(--danger); }
+.info { color: #7fd9a8; }
+button.link { background: none; border: 0; padding: 0; color: var(--accent); }
+button.link:hover:not(:disabled) { text-decoration: underline; }
+.auth { width: 100%; max-width: 380px; }
+.auth-links { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; margin-top: 0.8rem; }
+.account { display: flex; justify-content: flex-end; gap: 0.8rem; align-items: center; }
+.private { opacity: 0.7; }
 
 button {
   font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line);

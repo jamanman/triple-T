@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { rpc } from '../lib/supabase'
 import { useGame, useNow } from '../lib/useGame'
 import { countdown } from '../lib/util'
-import { goTo } from '../App'
+import { goTo, signOut } from '../App'
 import Lobby from './Lobby'
 import Board, { type Cell } from './Board'
 import ActionPanel from './ActionPanel'
@@ -49,7 +49,7 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
       <main className="center-page">
         <div className="card">
           <h2>Game not found</h2>
-          <p className="muted">It may have been closed by the host, or you're not in it. (Your identity lives in this browser, so use the same browser you joined with.)</p>
+          <p className="muted">It may have been closed by the host, or you're not in it. (Check you're signed in with the same email you joined with.)</p>
           <button onClick={() => goTo('/')}>Home</button>
         </div>
       </main>
@@ -78,13 +78,14 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
         {game.status === 'finale' && <span className="pill gold">Final jury vote · ends in {countdown(game.finale_ends_at, now)}</span>}
         {game.status === 'finished' && <span className="pill gold">Game over</span>}
         <span className="muted small push">{alive} alive · {players.length - alive} on the jury</span>
+        <button className="link small" onClick={signOut}>Sign out</button>
       </header>
 
       <div className="layout">
         <section className="board-col">
           <Board game={game} players={players} me={me} selected={selected} onSelect={setSelected} />
           <p className="muted small hint">
-            AP drops twice a day at random between 8am and 8pm ({game.timezone}). Range counts diagonals.
+            AP drops twice a day at random between 8am and 8pm ({game.timezone}). Range counts up/down/left/right steps only.
           </p>
         </section>
 

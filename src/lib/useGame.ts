@@ -16,7 +16,9 @@ const EMPTY: GameState = { game: null, players: [], events: [], results: [], myV
 
 /**
  * Loads everything for one game and keeps it live: any realtime change to the
- * game's rows triggers a (debounced) reload. The data is small, so reloading
+ * game's rows triggers a (debounced) reload. Player rows can't be streamed
+ * (their stats are secret), but every visible change logs an event, and RLS
+ * delivers each event only to the players allowed to see it. The data is small, so reloading
  * is simpler and more robust than patching state from change payloads.
  */
 export function useGame(gameId: string) {
@@ -26,7 +28,7 @@ export function useGame(gameId: string) {
   const load = useCallback(async () => {
     const [g, p, e, r, v] = await Promise.all([
       supabase.from('games').select('*').eq('id', gameId).maybeSingle(),
-      supabase.from('players').select('*').eq('game_id', gameId).order('joined_at'),
+      supabase.from('players_view').select('*').eq('game_id', gameId).order('joined_at'),
       supabase.from('events').select('*').eq('game_id', gameId).order('id', { ascending: false }).limit(150),
       supabase.from('jury_results').select('*').eq('game_id', gameId).order('day'),
       supabase.from('jury_votes').select('day, kind, target_id').eq('game_id', gameId),
@@ -54,7 +56,6 @@ export function useGame(gameId: string) {
     const channel = supabase
       .channel(`game-${gameId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${gameId}` }, reload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter }, reload)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'events', filter }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jury_results', filter }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jury_votes', filter }, reload)

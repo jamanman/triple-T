@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { Game, Player } from '../lib/types'
+import { dist } from '../lib/util'
 import Token from './Token'
 
 export interface Cell { x: number; y: number }
@@ -25,9 +26,9 @@ export default function Board({ game, players, me, selected, onSelect }: Props) 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const p = byCell.get(`${x},${y}`)
-      const d = Math.max(Math.abs(x - me.x!), Math.abs(y - me.y!))
-      const inRange = canAct && d <= me.range && d > 0
-      const canMoveHere = canAct && !p && Math.abs(x - me.x!) + Math.abs(y - me.y!) === 1
+      const d = dist({ x, y }, me)
+      const inRange = canAct && d <= (me.range ?? 0) && d > 0
+      const canMoveHere = canAct && !p && d === 1
       const isSel = selected?.x === x && selected?.y === y
       const cls = ['cell', inRange && 'in-range', canMoveHere && 'move-target', isSel && 'selected', p?.id === me.id && 'mine']
         .filter(Boolean).join(' ')
@@ -39,7 +40,7 @@ export default function Board({ game, players, me, selected, onSelect }: Props) 
           aria-label={p ? `${p.name}${p.alive ? '' : ' (dead)'} at ${x + 1},${y + 1}` : `Empty square ${x + 1},${y + 1}`}
         >
           {p && <Token player={p} />}
-          {p && p.alive && <span className="hearts-badge">{p.hearts}</span>}
+          {p && p.alive && p.hearts != null && <span className="hearts-badge">{p.hearts}</span>}
         </button>,
       )
     }

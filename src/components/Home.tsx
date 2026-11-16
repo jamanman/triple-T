@@ -1,20 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { rpc, supabase } from '../lib/supabase'
 import type { Game } from '../lib/types'
-import { goTo } from '../App'
+import { goTo, signOut } from '../App'
 
-const NAME_KEY = 'triple-t:name'
-
-function loadName() {
-  try { return localStorage.getItem(NAME_KEY) ?? '' } catch { return '' }
-}
 
 const STATUS_LABEL: Record<Game['status'], string> = {
   lobby: 'In lobby', active: 'In progress', finale: 'Jury deciding', finished: 'Finished',
 }
 
-export default function Home({ initialCode }: { initialCode?: string }) {
-  const [name, setName] = useState(loadName)
+interface Props { initialCode?: string; email: string; displayName: string }
+
+export default function Home({ initialCode, email, displayName }: Props) {
+  const [name, setName] = useState(displayName)
   const [maxPlayers, setMaxPlayers] = useState(10)
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
   const [code, setCode] = useState(initialCode ?? '')
@@ -35,7 +32,6 @@ export default function Home({ initialCode }: { initialCode?: string }) {
 
   async function run(fn: () => Promise<string>) {
     if (!name.trim()) return setError('Pick a name first')
-    try { localStorage.setItem(NAME_KEY, name.trim()) } catch { /* private mode */ }
     setBusy(true); setError(null)
     try { goTo(`/game/${await fn()}`) } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
@@ -52,6 +48,10 @@ export default function Home({ initialCode }: { initialCode?: string }) {
 
   return (
     <main className="home">
+      <div className="account small">
+        <span className="muted">Signed in as {email}</span>
+        <button className="link" onClick={signOut}>Sign out</button>
+      </div>
       <header className="hero">
         <h1>Triple-T</h1>
         <p className="muted">A slow-burn battle on a 15×15 grid. Five days. Two AP drops a day. The dead decide who wins.</p>
@@ -59,7 +59,7 @@ export default function Home({ initialCode }: { initialCode?: string }) {
 
       <div className="card">
         <label className="field">
-          <span>Your name</span>
+          <span>Your name in the game</span>
           <input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sam" />
         </label>
       </div>
@@ -112,11 +112,11 @@ export default function Home({ initialCode }: { initialCode?: string }) {
       <details className="card rules">
         <summary>Rules</summary>
         <ul>
-          <li>Everyone starts on a random square with 3 hearts, 0 AP and a range of 2.</li>
+          <li>Everyone starts on a random square with 3 hearts, 0 AP and a range of 2. Your hearts, AP and range are secret: nobody else can see them until the game ends.</li>
           <li>Twice a day, at random times between 8am and 8pm, every living player gets 1 AP.</li>
           <li>At any time, spend AP to: <b>move</b> one square up/down/left/right (1 AP), <b>shoot</b> someone in range (1 AP, −1 heart), <b>add a heart</b> (3 AP, max 4), or <b>upgrade range</b> by 1 (3 AP).</li>
-          <li>Range counts diagonals, so range 2 is the 5×5 square around you.</li>
-          <li>Send hearts or AP as gifts to anyone in range. A heart sent to a dead player revives them with 1 heart and 0 AP.</li>
+          <li>Range is counted in up/down/left/right steps, never diagonally. Range 2 reaches a square 2 steps away, or one step across and one step up.</li>
+          <li>Send hearts or AP as gifts to anyone in range; only the two of you are told. A heart sent to a dead player revives them with 1 heart and 0 AP.</li>
           <li>At 0 hearts you're dead: your AP goes to your killer and your body stays on the board.</li>
           <li>The dead form the jury. Each day they vote to <b>haunt</b> one player (no AP the next day) and to give one player <b>+2 AP</b>.</li>
           <li>When 3 players remain, or after day 5, survivors plead their case and the jury votes for the winner.</li>

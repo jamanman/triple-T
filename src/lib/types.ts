@@ -24,9 +24,10 @@ export interface Player {
   color: number
   x: number | null
   y: number | null
-  hearts: number
-  ap: number
-  range: number
+  /** Hidden (null) for other players until the game is finished. */
+  hearts: number | null
+  ap: number | null
+  range: number | null
   alive: boolean
   killed_by: string | null
   plea: string | null
@@ -39,6 +40,7 @@ export interface GameEvent {
   actor_id: string | null
   target_id: string | null
   message: string
+  visible_to: string[] | null
 }
 
 export interface JuryResult {

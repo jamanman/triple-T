@@ -29,7 +29,9 @@ export default function PlayerList({ game, players, me, results, onPick }: Props
                 {game.status === 'active' && p.id === haunted && <span title="Haunted: no AP today"> 👻</span>}
               </span>
               {p.alive ? (
-                <span className="row-stats"><Hearts n={p.hearts} /><span>{p.ap} AP</span><span>r{p.range}</span></span>
+                p.hearts != null && (
+                  <span className="row-stats"><Hearts n={p.hearts} /><span>{p.ap} AP</span><span>r{p.range}</span></span>
+                )
               ) : (
                 <span className="muted small">jury</span>
               )}

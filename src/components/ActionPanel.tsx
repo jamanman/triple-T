@@ -18,12 +18,14 @@ interface Props {
 export function Hearts({ n }: { n: number }) {
   return (
     <span className="hearts" aria-label={plural(n, 'heart')}>
-      {[0, 1, 2, 3].map((i) => <span key={i} className={i < n ? 'on' : 'off'}>♥</span>)}
+      {Array.from({ length: Math.max(4, n) }, (_, i) => <span key={i} className={i < n ? 'on' : 'off'}>♥</span>)}
     </span>
   )
 }
 
-export default function ActionPanel({ game, players, me, selected, setSelected, act, busy }: Props) {
+export default function ActionPanel({ game, players, me: meRow, selected, setSelected, act, busy }: Props) {
+  // Your own stats are always visible to you.
+  const me = { ...meRow, hearts: meRow.hearts ?? 0, ap: meRow.ap ?? 0, range: meRow.range ?? 0 }
   const target = selected ? players.find((p) => p.x === selected.x && p.y === selected.y) ?? null : null
   const [amount, setAmount] = useState(1)
   useEffect(() => setAmount(1), [target?.id])
@@ -46,7 +48,7 @@ export default function ActionPanel({ game, players, me, selected, setSelected, 
     return () => window.removeEventListener('keydown', onKey)
   }, [me.x, me.y, game.board_size, setSelected])
 
-  const isAdjacent = selected && Math.abs(selected.x - me.x!) + Math.abs(selected.y - me.y!) === 1
+  const isAdjacent = selected && dist(selected, me) === 1
   const d = target ? dist(me, target) : 0
   const inRange = target && d <= me.range
 
@@ -74,7 +76,7 @@ export default function ActionPanel({ game, players, me, selected, setSelected, 
       </div>
 
       <div className="selection">
-        {!selected && <p className="muted small">Tap a square or player on the board. Arrow keys pick a square next to you.</p>}
+        {!selected && <p className="muted small">Tap a square or player on the board. Arrow keys pick a square next to you. Shaded squares are in your range.</p>}
 
         {selected && !target && (
           isAdjacent ? (
@@ -97,10 +99,8 @@ export default function ActionPanel({ game, players, me, selected, setSelected, 
               <div>
                 <strong>{target.name}</strong>{!target.alive && <span className="muted"> · dead</span>}
                 <div className="stats small">
-                  {target.alive && <Hearts n={target.hearts} />}
-                  {target.alive && <span className="stat">{target.ap} AP</span>}
-                  <span className="stat">range {target.range}</span>
-                  <span className="stat">{plural(d, 'square')} away</span>
+                  <span className="stat">{plural(d, 'step')} away</span>
+                  <span className="muted">stats hidden</span>
                 </div>
               </div>
             </div>
@@ -115,9 +115,9 @@ export default function ActionPanel({ game, players, me, selected, setSelected, 
                 </button>
                 <div className="gift-row">
                   <span className="small">Gift</span>
-                  <input type="number" min={1} max={Math.max(1, me.ap, me.hearts - 1)} value={amount}
+                  <input type="number" min={1} max={Math.max(1, me.ap, me.hearts - 1)} value={amount} aria-label="Gift amount"
                     onChange={(e) => setAmount(Math.max(1, Math.floor(+e.target.value || 1)))} />
-                  <button disabled={busy || me.hearts - amount < 1 || target.hearts + amount > 4}
+                  <button disabled={busy || me.hearts - amount < 1}
                     onClick={() => act('gift', { p_target: target.id, p_kind: 'heart', p_amount: amount })}>
                     ♥ {amount === 1 ? 'heart' : 'hearts'}
                   </button>

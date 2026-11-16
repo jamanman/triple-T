@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { configured, supabase } from './lib/supabase'
+import Auth, { NewPassword } from './components/Auth'
 import Home from './components/Home'
 import GameScreen from './components/GameScreen'
 
@@ -18,21 +19,23 @@ export function goTo(path: string) {
   window.location.hash = path
 }
 
+export async function signOut() {
+  await supabase.auth.signOut()
+  goTo('/')
+}
+
 export default function App() {
-  const [session, setSession] = useState<Session | null>(null)
-  const [authError, setAuthError] = useState<string | null>(null)
+  const [session, setSession] = useState<Session | null | undefined>(undefined)
+  const [recovering, setRecovering] = useState(false)
   const hash = useHashRoute()
 
   useEffect(() => {
     if (!configured) return
-    // Players are anonymous Supabase users: the session lives in this browser.
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (data.session) return setSession(data.session)
-      const { data: signIn, error } = await supabase.auth.signInAnonymously()
-      if (error) setAuthError(error.message)
-      else setSession(signIn.session)
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s)
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
     })
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => s && setSession(s))
     return () => data.subscription.unsubscribe()
   }, [])
 
@@ -46,21 +49,14 @@ export default function App() {
       </main>
     )
   }
-  if (authError) {
-    return (
-      <main className="center-page">
-        <div className="card">
-          <h1>Couldn't sign in</h1>
-          <p>{authError}</p>
-          <p className="muted">Make sure anonymous sign-ins are enabled in Supabase (Authentication → Sign In / Providers).</p>
-        </div>
-      </main>
-    )
-  }
-  if (!session) return <main className="center-page"><p className="muted">Connecting…</p></main>
+  if (session === undefined) return <main className="center-page"><p className="muted">Connecting…</p></main>
+  // Accounts from the earlier anonymous version can't resume; ask them to sign up.
+  if (!session || session.user.is_anonymous) return <Auth />
+  if (recovering) return <NewPassword onDone={() => setRecovering(false)} />
 
   const match = hash.match(/^#\/game\/([0-9a-f-]{36})/)
   if (match) return <GameScreen key={match[1]} gameId={match[1]} userId={session.user.id} />
   const join = hash.match(/^#\/join\/([A-Za-z0-9]{6})/)
-  return <Home initialCode={join?.[1].toUpperCase()} />
+  const displayName = (session.user.user_metadata?.display_name as string | undefined) ?? ''
+  return <Home initialCode={join?.[1].toUpperCase()} email={session.user.email ?? ''} displayName={displayName} />
 }
