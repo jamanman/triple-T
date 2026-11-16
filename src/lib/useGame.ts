@@ -17,9 +17,10 @@ const EMPTY: GameState = { game: null, players: [], events: [], results: [], myV
 /**
  * Loads everything for one game and keeps it live: any realtime change to the
  * game's rows triggers a (debounced) reload. Player rows can't be streamed
- * (their stats are secret), but every visible change logs an event, and RLS
- * delivers each event only to the players allowed to see it. The data is small, so reloading
- * is simpler and more robust than patching state from change payloads.
+ * (their stats are secret), so the server signals changes instead: feed events
+ * (RLS delivers each only to the players allowed to see it), games.updated_at
+ * for public changes, and player_pings for private changes to your own stats.
+ * The data is small, so reloading is simpler than patching state from payloads.
  */
 export function useGame(gameId: string) {
   const [state, setState] = useState<GameState>(EMPTY)
@@ -59,6 +60,7 @@ export function useGame(gameId: string) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'events', filter }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jury_results', filter }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jury_votes', filter }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pings', filter }, reload)
       .subscribe((status) => { if (status === 'SUBSCRIBED') reload() })
 
     // Safety nets for missed realtime messages (sleeping laptops, flaky mobile).

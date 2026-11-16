@@ -116,8 +116,9 @@ export default function Home({ initialCode, email, displayName }: Props) {
           <li>Twice a day, at random times between 8am and 8pm, every living player gets 1 AP.</li>
           <li>At any time, spend AP to: <b>move</b> one square up/down/left/right (1 AP), <b>shoot</b> someone in range (1 AP, −1 heart), <b>add a heart</b> (3 AP, max 4), or <b>upgrade range</b> by 1 (3 AP).</li>
           <li>Range is counted in up/down/left/right steps, never diagonally. Range 2 reaches a square 2 steps away, or one step across and one step up.</li>
-          <li>Send hearts or AP as gifts to anyone in range; only the two of you are told. A heart sent to a dead player revives them with 1 heart and 0 AP.</li>
+          <li>Send hearts or AP as gifts to anyone in range (gifts can't take anyone above 4 hearts). A heart sent to a dead player revives them with 1 heart and 0 AP.</li>
           <li>At 0 hearts you're dead: your AP goes to your killer and your body stays on the board.</li>
+          <li>The activity feed shows AP drops, moves, deaths and revives. If you're shot, only you are told, and never by whom.</li>
           <li>The dead form the jury. Each day they vote to <b>haunt</b> one player (no AP the next day) and to give one player <b>+2 AP</b>.</li>
           <li>When 3 players remain, or after day 5, survivors plead their case and the jury votes for the winner.</li>
         </ul>

@@ -29,7 +29,6 @@ export interface Player {
   ap: number | null
   range: number | null
   alive: boolean
-  killed_by: string | null
   plea: string | null
 }
 

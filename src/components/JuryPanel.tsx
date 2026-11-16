@@ -3,16 +3,15 @@ import type { Act } from './GameScreen'
 
 interface Props { game: Game; players: Player[]; me: Player; myVotes: JuryVote[]; act: Act; busy: boolean }
 
-export default function JuryPanel({ game, players, me, myVotes, act, busy }: Props) {
+export default function JuryPanel({ game, players, myVotes, act, busy }: Props) {
   const living = players.filter((p) => p.alive).sort((a, b) => a.name.localeCompare(b.name))
   const vote = (kind: 'haunt' | 'bonus') => myVotes.find((v) => v.kind === kind && v.day === game.current_day)?.target_id ?? ''
-  const killer = players.find((p) => p.id === me.killed_by)
 
   return (
     <div className="card jury">
       <h3>You're on the jury</h3>
       <p className="muted small">
-        {killer ? `${killer.name} killed you. ` : ''}Your body stays on the board. Someone in range can revive you by sending a heart.
+        Your body stays on the board. Someone in range can revive you by sending a heart.
       </p>
       <p className="small">Today's votes (day {game.current_day}) are secret and close at midnight. You can change them until then.</p>
 

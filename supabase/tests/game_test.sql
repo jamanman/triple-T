@@ -102,7 +102,7 @@ select test.fails(format($$select public.gift(%L, %L, 'heart', 3)$$, current_set
 
 select public.act_add_heart(current_setting('t.game')::uuid);
 select test.ok((select hearts = 4 and ap = 6 from test.players where id = test.pid(1)), 'add heart costs 3 AP');
-select test.fails(format($$select public.act_add_heart(%L)$$, current_setting('t.game')), 'up to 4', 'can only buy up to 4 hearts');
+select test.fails(format($$select public.act_add_heart(%L)$$, current_setting('t.game')), 'maximum of 4', 'can only buy up to 4 hearts');
 select public.act_upgrade_range(current_setting('t.game')::uuid);
 select test.ok((select range = 3 and ap = 3 from test.players where id = test.pid(1)), 'upgrade range costs 3 AP');
 
@@ -110,11 +110,18 @@ select test.ok((select range = 3 and ap = 3 from test.players where id = test.pi
 ------------------------------------------------------------ secrecy
 select test.ok((select hearts = 4 and ap = 3 and range = 3 from players_view where id = test.pid(1)), 'you see your own stats');
 select test.ok((select hearts is null and ap is null and range is null from players_view where id = test.pid(3)), 'other players'' stats are hidden');
-select test.ok((select bool_and(message not similar to '%[0-9] (heart|AP)%') from events where visible_to is null), 'public events reveal no numbers');
-select test.ok(exists (select 1 from events where kind = 'loot'), 'killer is told the AP they took');
+select test.ok(not exists (select 1 from information_schema.columns where table_name = 'players_view' and column_name = 'killed_by'), 'killers are not revealed');
+select test.ok((select bool_and(kind in ('ap_drop', 'death', 'revive', 'move', 'shot', 'bonus', 'haunted')) from test.events),
+  'feed only has AP handouts, deaths, revives, moves and shots');
+select test.ok(not exists (select 1 from test.events where kind <> 'move' and (actor_id is not null or message like '%Alice%')),
+  'feed never names the shooter or killer');
+select test.ok(not exists (select 1 from events where kind = 'shot'), 'shooter gets no feed entry');
+select test.as_user(2);
+select test.ok((select count(*) from events where kind = 'shot' and message like 'You were shot!%') = 2, 'victim is told they were shot');
 select test.as_user(3);
-select test.ok(not exists (select 1 from events where kind in ('heal', 'upgrade', 'loot')), 'others don''t see your purchases or loot');
-select test.ok((select count(*) from events where kind = 'kill') = 1, 'everyone sees the kill');
+select test.ok(not exists (select 1 from events where kind = 'shot'), 'other players don''t see shots');
+select test.ok(exists (select 1 from events where kind = 'death' and message = 'Bob died.'), 'everyone sees the death');
+select test.ok(exists (select 1 from events where kind = 'move' and message = 'Alice moved.'), 'everyone sees moves');
 select test.as_user(1);
 
 ------------------------------------------------------------ jury
@@ -146,6 +153,16 @@ select test.ok((select current_day from games) = 2, 'day rolls over');
 select test.ok((select day_ends_at = ((now() at time zone 'UTC')::date + 1)::timestamp at time zone 'UTC' from games), 'day_ends_at is next local midnight');
 select test.ok((select haunted_id = test.pid(1) and bonus_id = test.pid(3) from jury_results where day = 1), 'jury tallied');
 select test.ok((select ap from test.players where id = test.pid(3)) = 1 + 2, 'bonus gives 2 AP');
+set role authenticated;
+select test.as_user(1);
+select test.ok(not exists (select 1 from jury_results), 'living players can''t see jury results');
+select test.as_user(2);
+select test.ok(exists (select 1 from jury_results), 'the jury sees its results');
+select test.as_user(3);
+select test.ok(exists (select 1 from events where kind = 'bonus'), 'bonus winner is told privately');
+select test.as_user(4);
+select test.ok(not exists (select 1 from events where kind = 'bonus'), 'nobody else hears about the bonus');
+reset role;
 select test.ok((select count(*) from ap_drops where day = 2) = 2, 'two drops scheduled for day 2');
 select test.ok((select bool_and(scheduled_at >= ((now() at time zone 'UTC')::date + time '08:00') at time zone 'UTC'
                 and scheduled_at < ((now() at time zone 'UTC')::date + time '20:00') at time zone 'UTC') from ap_drops where day = 2),
@@ -154,6 +171,7 @@ update ap_drops set scheduled_at = now() - interval '1 second' where day = 2;
 select internal.tick();
 select test.ok((select ap from test.players where id = test.pid(1)) = 4, 'haunted player gets no AP next day');
 select test.ok((select ap from test.players where id = test.pid(3)) = 3 + 2, 'others get both drops');
+select test.ok((select count(*) from events where kind = 'haunted' and visible_to = array[test.pid(1)]) = 2, 'haunted player is told privately');
 
 ------------------------------------------------------------ revive, then finale
 set role authenticated;
@@ -163,11 +181,20 @@ select test.ok((select alive and hearts = 1 and ap = 0 from test.players where i
 select test.ok((select hearts from test.players where id = test.pid(1)) = 3, 'giver loses the heart');
 select public.gift(current_setting('t.game')::uuid, test.pid(2), 'ap', 2);
 select test.ok((select ap from test.players where id = test.pid(2)) = 2, 'AP gift');
+select test.ok(not exists (select 1 from test.events where kind like 'gift%'), 'gifts are not in the feed');
 select test.as_user(2);
-select test.ok(exists (select 1 from events where kind = 'gift_ap'), 'gift receiver sees the gift');
+select test.ok(exists (select 1 from player_pings), 'gift receiver''s screen is told to refresh');
 select test.as_user(4);
-select test.ok(not exists (select 1 from events where kind = 'gift_ap'), 'gifts are private');
-select test.ok(exists (select 1 from events where kind = 'revive'), 'revives are public');
+select test.ok(not exists (select 1 from player_pings), 'nobody else is pinged');
+select test.ok(exists (select 1 from events where kind = 'revive' and message = 'Bob was revived!' and actor_id is null), 'revives are announced anonymously');
+reset role;
+update players set hearts = 3 where id = test.pid(2);
+set role authenticated;
+select test.as_user(1);
+select test.fails(format($$select public.gift(%L, %L, 'heart', 2)$$, current_setting('t.game'), test.pid(2)), 'maximum is 4', 'gifts cannot go above 4 hearts');
+reset role;
+update players set hearts = 1 where id = test.pid(2);
+set role authenticated;
 select test.as_user(1);
 select public.act_shoot(current_setting('t.game')::uuid, test.pid(2));
 select test.ok((select ap from test.players where id = test.pid(1)) = 1 + 2, 'kill again, AP transferred');
@@ -192,7 +219,6 @@ select test.ok((select status from games) = 'finale', 'waits for all jurors');
 select test.as_user(5);
 select public.cast_vote(current_setting('t.game')::uuid, 'winner', test.pid(3));
 select test.ok((select status = 'finished' and winner_ids = array[test.pid(3)] from games), 'jury picks the winner');
-select test.ok((select message from events order by id desc limit 1) = 'Game over! Cara wins.', 'winner announced');
 select test.ok((select bool_and(hearts is not null and ap is not null) from players_view), 'all stats revealed when the game ends');
 
 reset role;
