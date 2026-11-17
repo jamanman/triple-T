@@ -17,7 +17,7 @@ export default function EventLog({ events, now }: { events: GameEvent[]; now: nu
             <time className="muted small" title={new Date(e.created_at).toLocaleString()}>{timeAgo(e.created_at, now)}</time>
           </li>
         ))}
-        {events.length === 0 && <li className="muted small">Nothing has happened yet.</li>}
+        {events.length === 0 && <li className="muted small empty">Nothing has happened yet.</li>}
       </ol>
     </div>
   )

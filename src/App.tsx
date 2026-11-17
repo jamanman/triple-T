@@ -4,6 +4,7 @@ import { configured, supabase } from './lib/supabase'
 import Auth, { NewPassword } from './components/Auth'
 import Home from './components/Home'
 import GameScreen from './components/GameScreen'
+import { forgetPushOnThisDevice, syncPush } from './lib/push'
 
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash)
@@ -20,6 +21,7 @@ export function goTo(path: string) {
 }
 
 export async function signOut() {
+  await forgetPushOnThisDevice()
   await supabase.auth.signOut()
   goTo('/')
 }
@@ -38,6 +40,9 @@ export default function App() {
     })
     return () => data.subscription.unsubscribe()
   }, [])
+
+  const userId = session && !session.user.is_anonymous ? session.user.id : null
+  useEffect(() => { if (userId) syncPush() }, [userId])
 
   if (!configured) {
     return (

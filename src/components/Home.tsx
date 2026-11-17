@@ -3,6 +3,7 @@ import { rpc, supabase } from '../lib/supabase'
 import type { Game } from '../lib/types'
 import { browserTimeZone, dayLabel } from '../lib/util'
 import { goTo, signOut } from '../App'
+import NotificationToggle from './NotificationToggle'
 
 const STATUS_LABEL: Record<Game['status'], string> = {
   lobby: 'In lobby', active: 'In progress', finale: 'Jury deciding', finished: 'Finished',
@@ -76,6 +77,8 @@ export default function Home({ initialCode, email, displayName }: Props) {
       </div>
 
       {error && <p className="error">{error}</p>}
+
+      <NotificationToggle />
 
       {games.length > 0 && (
         <div className="card">

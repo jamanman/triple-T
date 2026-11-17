@@ -300,5 +300,44 @@ select test.as_user(8); select public.cast_vote(current_setting('t.g2')::uuid, '
 select test.as_user(9); select public.cast_vote(current_setting('t.g2')::uuid, 'winner', test.pid(7));
 select test.ok((select status = 'finished' and cardinality(winner_ids) = 2 from games where id = current_setting('t.g2')::uuid), 'same tie again: shared victory');
 
+------------------------------------------------------------ push notifications
+set role authenticated;
+select test.as_user(6);
+select test.ok(public.push_public_key() is null, 'no push key until the edge function creates one');
+select test.fails($$select public.save_push_subscription('http://insecure.example/x', 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', 'BTBZMqHH6r4Tts7J_aSIgg')$$, 'Invalid', 'push endpoints must be https');
+select public.save_push_subscription('https://push.example/fay', 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', 'BTBZMqHH6r4Tts7J_aSIgg');
+select test.as_user(7); select public.save_push_subscription('https://push.example/gil', 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', 'BTBZMqHH6r4Tts7J_aSIgg');
+select test.as_user(8); select public.save_push_subscription('https://push.example/hal', 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', 'BTBZMqHH6r4Tts7J_aSIgg');
+select public.save_push_subscription('https://push.example/hal-old', 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', 'BTBZMqHH6r4Tts7J_aSIgg');
+select public.delete_push_subscription('https://push.example/hal-old');
+select test.as_user(9);
+select public.delete_push_subscription('https://push.example/gil');  -- not Ida's: ignored
+select test.fails($$select * from push_subscriptions$$, 'permission denied', 'subscriptions are not readable');
+select test.fails($$select * from push_config$$, 'permission denied', 'VAPID keys are not readable');
+select test.fails($$select public.push_job(1)$$, 'permission denied', 'players can''t trigger pushes');
+select test.fails($$select public.push_init_keys('a', '{}', 'b')$$, 'permission denied', 'players can''t set push keys');
+reset role;
+select test.ok((select count(*) from push_subscriptions) = 3, 'subscriptions saved; delete only removes your own');
+select public.push_init_keys('PUBKEY', '{"kty":"EC"}', 'https://site.example');
+select test.ok(public.push_init_keys('OTHER', '{}', 'x') = 'PUBKEY', 'push keys are only created once');
+
+insert into events (game_id, kind, actor_id, message) values (current_setting('t.g2')::uuid, 'move', test.pid(6), 'Fay moved.');
+select set_config('t.ev', (select max(id) from events)::text, false);
+select test.ok((select array_agg(s->>'endpoint' order by s->>'endpoint')
+                from jsonb_array_elements(public.push_job(current_setting('t.ev')::bigint)->'subscriptions') s)
+               = array['https://push.example/gil', 'https://push.example/hal'], 'move is pushed to everyone except the mover');
+select test.ok(public.push_job(current_setting('t.ev')::bigint) is null, 'each event is pushed only once');
+
+insert into events (game_id, kind, target_id, message, visible_to) values (current_setting('t.g2')::uuid, 'shot', test.pid(7), 'You were shot! 1 heart left.', array[test.pid(7)]);
+select set_config('t.ev', (select max(id) from events)::text, false);
+select set_config('t.job', public.push_job(current_setting('t.ev')::bigint)::text, false);
+select test.ok((select jsonb_array_length(current_setting('t.job')::jsonb->'subscriptions')) = 1
+                and current_setting('t.job')::jsonb->'subscriptions'->0->>'endpoint' = 'https://push.example/gil', 'private events only go to who can see them');
+select test.ok((current_setting('t.job')::jsonb->>'body') = 'You were shot! 1 heart left.'
+                and (current_setting('t.job')::jsonb->>'url') = '#/game/' || current_setting('t.g2')::uuid, 'push carries the feed message and a link to the game');
+
+insert into events (game_id, kind, message, created_at) values (current_setting('t.g2')::uuid, 'ap_drop', 'AP drop!', now() - interval '1 hour');
+select test.ok(public.push_job((select max(id) from events)) is null, 'old events are never pushed');
+
 reset role;
 \echo ALL TESTS PASSED

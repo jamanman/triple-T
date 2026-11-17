@@ -26,6 +26,7 @@ All rules are enforced in the database. The browser can only read game state and
    npm run dev
    ```
 5. **Deploy** by running `npm run build` and putting `dist/` on any static host (Vercel, Netlify, Cloudflare Pages…). Routing uses `#/…` hashes, so no rewrite rules are needed.
+6. **Set up push notifications** (optional, but players will want them). See [Push notifications](#push-notifications) below.
 
 ## How it works
 
@@ -39,6 +40,7 @@ All rules are enforced in the database. The browser can only read game state and
 | Gift and jury bonus notices | `supabase/migrations/20261117000100_gift_sender_bonus_notice.sql` |
 | Game length, jury revotes | `supabase/migrations/20261117000200_game_length_and_revotes.sql` |
 | Random daily tie-break | `supabase/migrations/20261117000300_daily_ties_random.sql` |
+| Push notifications | `supabase/migrations/20261118000000_push_notifications.sql` + `supabase/functions/send-push/index.ts` |
 | Lobby settings | RPC: `update_settings` (host only, before the game starts) |
 | Player actions | RPCs: `act_move`, `act_shoot`, `act_add_heart`, `act_upgrade_range`, `gift` |
 | Lobby | RPCs: `create_game`, `join_game`, `leave_game`, `start_game` |
@@ -51,6 +53,31 @@ All rules are enforced in the database. The browser can only read game state and
 - **Refresh signals:** other changes that clients must notice (joins, pleas, new days) bump `games.updated_at`.
 - AP drop times are stored in `ap_drops`, which players can't read, so drops are a surprise.
 - Jury votes are secret: you can only read your own.
+
+## Push notifications
+
+Every entry in a player's activity feed is also sent as a push notification to each device where they've turned notifications on: AP drops, moves, deaths, revives, "You were shot!", gifts and jury bonuses. Each one only goes to the players who can see that entry, and never to the player who did it (you aren't notified of your own move). Tapping a notification opens the game.
+
+Players turn them on with the **🔔 Turn on notifications** button on the home page or in a game. On iPhone and iPad (iOS 16.4+), they must first add the site to the Home Screen (Share → **Add to Home Screen**) and open it from there; that's an Apple requirement.
+
+**How it works:** a new row in `events` fires a Database Webhook, which calls the `send-push` Edge Function. The function asks the database (`push_job`) who should get that event, then encrypts and sends each notification using the Web Push standard. The keys that sign notifications are created automatically the first time someone turns notifications on, and stored in `push_config`, which clients can't read. Each event is only ever sent once, and only within 10 minutes of happening, so calling the function directly can't resend or invent notifications.
+
+### Setup (one time, in the Supabase dashboard)
+
+1. **Run the migration** `supabase/migrations/20261118000000_push_notifications.sql` in the SQL Editor.
+2. **Create the Edge Function:**
+   - *Edge Functions → Deploy a new function → Via Editor*.
+   - Name it exactly `send-push`.
+   - Replace the example code with the whole of `supabase/functions/send-push/index.ts`, then click **Deploy**.
+   - Open the function's **Details** (or settings) tab, turn **off** "Enforce JWT verification" (also called "Verify JWT"), and save. The webhook and the app call it without a user token; the function protects itself as described above.
+   - With the Supabase CLI instead: `supabase functions deploy send-push --no-verify-jwt`.
+3. **Create the Database Webhook:**
+   - *Integrations → Database Webhooks* (enable webhooks if asked) *→ Create a new hook*.
+   - Name: `push-notifications`. Table: `events`. Events: **Insert** only.
+   - Type: **Supabase Edge Functions**, function `send-push`, method POST, timeout 5000 ms. Click **Create webhook**.
+4. **Redeploy the site** so it includes the service worker (`public/sw.js`) and app manifest. Vercel does this automatically when `main` changes.
+
+To check it works, turn notifications on, then have someone else move. You can see each call in *Edge Functions → send-push → Logs*: the response shows `sent`, `removed` (devices that unsubscribed) and `failed`.
 
 ## Rule decisions
 
@@ -83,8 +110,14 @@ The rules leave some points open. This is how they are implemented; most are a o
 
 ## Testing
 
-`supabase/tests/game_test.sql` plays a full game as five users, plus a second game to check the host settings, and checks 102 rules, including the RLS restrictions. It runs against a **throwaway** plain Postgres 15+ database, with stand-ins for Supabase's `auth` schema and roles:
+`supabase/tests/game_test.sql` plays a full game as five users, plus a second game to check the host settings, and checks 115 rules, including the RLS restrictions. It runs against a **throwaway** plain Postgres 15+ database, with stand-ins for Supabase's `auth` schema and roles:
 
 ```sh
 PGHOST=localhost PGUSER=postgres PGDATABASE=scratch supabase/tests/run-local.sh
+```
+
+The `send-push` Edge Function has its own tests, including the official example from the Web Push encryption spec (RFC 8291) and a check that a browser can decrypt what it sends:
+
+```sh
+node --test supabase/functions/send-push/send-push.test.ts
 ```
