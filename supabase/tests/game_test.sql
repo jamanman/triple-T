@@ -266,7 +266,7 @@ select test.as_user(6);
 select public.act_add_heart(current_setting('t.g2')::uuid);
 select test.fails(format($$select public.act_add_heart(%L)$$, current_setting('t.g2')), 'maximum of 2', 'buying respects max hearts');
 
--- daily revotes: Hal and Ida die, split their haunt vote
+-- daily ties: Hal and Ida die and split their haunt vote
 reset role;
 update players set hearts = 0 where id in (test.pid(8), test.pid(9));
 set role authenticated;
@@ -278,22 +278,10 @@ select public.cast_vote(current_setting('t.g2')::uuid, 'haunt', test.pid(7));
 reset role;
 update games set day1_date = (now() at time zone 'UTC')::date - 1 where id = current_setting('t.g2')::uuid;
 select internal.tick();
-select test.ok((select haunted_id is null and bonus_id = test.pid(6) from jury_results where game_id = current_setting('t.g2')::uuid and day = 1), 'a tied haunt waits; a clear bonus is applied');
-select test.ok((select kind = 'haunt' and round = 1 and candidates = (select array_agg(c order by c) from unnest(array[test.pid(6), test.pid(7)]) c)
-                from jury_runoffs where game_id = current_setting('t.g2')::uuid), 'tied daily vote goes to a revote');
-set role authenticated;
-select test.as_user(6);
-select test.ok(not exists (select 1 from jury_runoffs), 'living players don''t see daily revotes');
-select test.fails(format($$select public.cast_revote(%L, 'haunt', %L)$$, current_setting('t.g2'), test.pid(7)), 'Only dead', 'only the jury revotes');
-select test.as_user(8);
-select test.ok(exists (select 1 from jury_runoffs), 'jurors see the revote');
-select public.cast_revote(current_setting('t.g2')::uuid, 'haunt', test.pid(7));
-select test.ok(exists (select 1 from jury_runoffs), 'revote stays open until all jurors vote or it closes');
-reset role;
-update jury_runoffs set closes_at = now() - interval '1 second' where game_id = current_setting('t.g2')::uuid;
-select internal.tick();
-select test.ok((select haunted_id = test.pid(7) from jury_results where game_id = current_setting('t.g2')::uuid and day = 1), 'the revote decides the haunt');
-select test.ok(not exists (select 1 from jury_runoffs where game_id = current_setting('t.g2')::uuid), 'revote closed');
+select test.ok((select haunted_id in (test.pid(6), test.pid(7)) from jury_results where game_id = current_setting('t.g2')::uuid and day = 1),
+  'a tied haunt goes to one of the tied players at random');
+select test.ok((select bonus_id = test.pid(6) from jury_results where game_id = current_setting('t.g2')::uuid and day = 1), 'a clear bonus is applied');
+select test.ok(not exists (select 1 from jury_runoffs where game_id = current_setting('t.g2')::uuid), 'daily ties have no revote');
 
 -- no day limit
 update games set day1_date = (now() at time zone 'UTC')::date - 7 where id = current_setting('t.g2')::uuid;

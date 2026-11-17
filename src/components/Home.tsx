@@ -105,7 +105,7 @@ export default function Home({ initialCode, email, displayName }: Props) {
           <li>The activity feed shows AP drops, moves, deaths and revives. If you're shot, only you are told, and never by whom. If you're sent a gift, only you are told, and you see who sent it.</li>
           <li>The dead form the jury. Each day they vote to <b>haunt</b> one player (no AP the next day) and to give one player <b>+2 AP</b>.</li>
           <li>When 3 players remain, or after the last day (the host sets the game length, or no limit), survivors plead their case and the jury votes for the winner.</li>
-          <li>If a jury vote is tied, the jury revotes between only the tied players.</li>
+          <li>If a daily haunt or +2 AP vote is tied, one of the tied players is picked at random. If the final winner vote is tied, the jury revotes between only the tied players.</li>
         </ul>
       </details>
     </main>

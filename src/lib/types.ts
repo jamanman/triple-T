@@ -62,7 +62,7 @@ export interface JuryVote {
   target_id: string
 }
 
-/** An open revote between tied players. Daily ones are only visible to the jury. */
+/** An open revote between tied players in the final winner vote. */
 export interface JuryRunoff {
   day: number
   kind: 'haunt' | 'bonus' | 'winner'

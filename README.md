@@ -38,6 +38,7 @@ All rules are enforced in the database. The browser can only read game state and
 | Host settings | `supabase/migrations/20261117000000_lobby_settings.sql` |
 | Gift and jury bonus notices | `supabase/migrations/20261117000100_gift_sender_bonus_notice.sql` |
 | Game length, jury revotes | `supabase/migrations/20261117000200_game_length_and_revotes.sql` |
+| Random daily tie-break | `supabase/migrations/20261117000300_daily_ties_random.sql` |
 | Lobby settings | RPC: `update_settings` (host only, before the game starts) |
 | Player actions | RPCs: `act_move`, `act_shoot`, `act_add_heart`, `act_upgrade_range`, `gift` |
 | Lobby | RPCs: `create_game`, `join_game`, `leave_game`, `start_game` |
@@ -75,14 +76,14 @@ The rules leave some points open. This is how they are implemented; most are a o
 - **Stats are secret.** You see only your own hearts, AP and range. Everyone sees positions, moves, who is alive or dead, revives and AP drops. All stats are revealed when the game ends.
 - **Jury results are for the jury.** Only dead players can see who was haunted or got the bonus. The haunted player is told privately at each AP drop they miss. The bonus player is told privately, and everyone else is told that someone got the bonus, without saying who.
 - **Jury votes are daily.** The dead vote during the day and votes are tallied at midnight. The *haunted* player gets no AP drops the **next** day. The *bonus* player gets +2 AP straight away. Only votes from players who are still dead at the tally count.
-- **Daily ties go to one revote** between only the tied players, using `cast_revote`. Only the jury sees it. It's open from midnight until the next morning's AP window opens (at least 1 hour), so a haunt is settled before any drop, and it closes early once every juror has voted. If it's still tied, or nobody revotes, nobody is haunted or awarded for that vote.
+- **Daily ties are settled at random.** If the haunt or +2 AP vote is tied, one of the tied players is picked at random, straight away.
 - **The finale starts** as soon as only 3 players are alive, or when the last day ends. With no day limit, only the 3-players rule applies. All actions freeze. Survivors write a plea, and the jury votes for a winner. The finale ends when every juror has voted, or after 24 hours.
 - **A tied winner vote goes to a revote** between only the tied players. Everyone can see the revote. Each revote gets a fresh finale period, or ends once every juror has voted. Revotes repeat as long as they narrow the field. If a revote ends in exactly the same tie, or nobody votes in it, the tied players share the win. If the jury is empty or nobody voted at all, every survivor shares the win.
 - **Games need at least 4 players to start.** With 3 players or fewer, the finale would begin immediately. The host picks the maximum, from 4 to 25.
 
 ## Testing
 
-`supabase/tests/game_test.sql` plays a full game as five users, plus a second game to check the host settings, and checks 107 rules, including the RLS restrictions. It runs against a **throwaway** plain Postgres 15+ database, with stand-ins for Supabase's `auth` schema and roles:
+`supabase/tests/game_test.sql` plays a full game as five users, plus a second game to check the host settings, and checks 102 rules, including the RLS restrictions. It runs against a **throwaway** plain Postgres 15+ database, with stand-ins for Supabase's `auth` schema and roles:
 
 ```sh
 PGHOST=localhost PGUSER=postgres PGDATABASE=scratch supabase/tests/run-local.sh

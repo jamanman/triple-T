@@ -96,7 +96,7 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
           {game.status === 'active' && (
             me.alive
               ? <ActionPanel game={game} players={players} me={me} selected={selected} setSelected={setSelected} act={act} busy={busy} />
-              : <JuryPanel game={game} players={players} me={me} myVotes={state.myVotes} runoffs={state.runoffs} act={act} busy={busy} now={now} />
+              : <JuryPanel game={game} players={players} me={me} myVotes={state.myVotes} act={act} busy={busy} />
           )}
           <PlayerList players={players} me={me} results={state.results} game={game}
             onPick={(p) => setSelected({ x: p.x!, y: p.y! })} />
