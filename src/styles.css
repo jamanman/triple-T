@@ -78,6 +78,11 @@ textarea { resize: vertical; margin-bottom: 0.5rem; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1rem; }
 .time-row { display: flex; align-items: center; gap: 0.5rem; }
 .time-row input { flex: 1; min-width: 0; }
+.check { display: flex; align-items: center; gap: 0.35rem; white-space: nowrap; font-size: 0.9rem; }
+.check input { width: auto; flex: none; }
+.revote { border: 1px solid var(--gold); border-radius: 10px; padding: 0.6rem; margin-bottom: 0.8rem; }
+.revote .row { margin-top: 0.4rem; }
+.revote-banner { border: 1px solid var(--gold); border-radius: 8px; padding: 0.5rem 0.6rem; color: var(--gold); }
 .settings-list { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin: 0 0 0.6rem; }
 .settings-list dt { color: var(--muted); }
 .settings-list dd { margin: 0; }

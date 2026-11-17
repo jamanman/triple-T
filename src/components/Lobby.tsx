@@ -65,6 +65,7 @@ function SettingsSummary({ game }: { game: Game }) {
     <div className="card">
       <h2>Game settings</h2>
       <dl className="settings-list">
+        <dt>Length</dt><dd>{game.total_days == null ? 'No limit (ends when 3 players remain)' : `${game.total_days} days`}</dd>
         <dt>Grid</dt><dd>{game.board_size}×{game.board_size}</dd>
         <dt>Max players</dt><dd>{game.max_players}</dd>
         <dt>Max hearts</dt><dd>{game.max_hearts} (everyone starts with {Math.min(3, game.max_hearts)})</dd>
@@ -88,6 +89,7 @@ function SettingsForm({ game, playerCount, act, busy, onDirty }: {
     start: hhmm(game.ap_window_start),
     end: hhmm(game.ap_window_end),
     tz: game.timezone,
+    days: game.total_days, // null = no limit
   })
   const [s, setS] = useState(fromGame)
   const [saved, setSaved] = useState(false)
@@ -102,7 +104,7 @@ function SettingsForm({ game, playerCount, act, busy, onDirty }: {
   async function save() {
     const ok = await act('update_settings', {
       p_board_size: s.board, p_max_players: s.players, p_max_hearts: s.hearts, p_ap_drops_per_day: s.drops,
-      p_ap_window_start: s.start, p_ap_window_end: s.end, p_timezone: s.tz,
+      p_ap_window_start: s.start, p_ap_window_end: s.end, p_timezone: s.tz, p_total_days: s.days,
     })
     if (ok) setSaved(true)
   }
@@ -111,6 +113,19 @@ function SettingsForm({ game, playerCount, act, busy, onDirty }: {
     <div className="card">
       <h2>Game settings</h2>
       <div className="settings-grid">
+        <div className="field">
+          <span>Game length</span>
+          <div className="time-row">
+            <input type="number" min={1} max={365} disabled={s.days == null} aria-label="Number of days"
+              value={s.days ?? ''} onChange={(e) => set('days', Math.min(365, Math.max(1, Math.floor(+e.target.value || 1))))} />
+            <span>days</span>
+            <label className="check">
+              <input type="checkbox" checked={s.days == null} onChange={(e) => set('days', e.target.checked ? null : 5)} />
+              No limit
+            </label>
+          </div>
+          {s.days == null && <small className="muted">The game ends only when 3 players remain.</small>}
+        </div>
         <label className="field">
           <span>Grid size: <strong>{s.board}×{s.board}</strong></span>
           <input type="range" min={10} max={20} value={s.board} onChange={(e) => set('board', +e.target.value)} />

@@ -12,7 +12,8 @@ export interface Game {
   /** 'HH:MM:SS' local time in `timezone` */
   ap_window_start: string
   ap_window_end: string
-  total_days: number
+  /** null = no day limit */
+  total_days: number | null
   status: GameStatus
   current_day: number
   day_ends_at: string | null
@@ -57,5 +58,15 @@ export interface JuryResult {
 export interface JuryVote {
   day: number
   kind: 'haunt' | 'bonus' | 'winner'
+  round: number
   target_id: string
+}
+
+/** An open revote between tied players. Daily ones are only visible to the jury. */
+export interface JuryRunoff {
+  day: number
+  kind: 'haunt' | 'bonus' | 'winner'
+  round: number
+  candidates: string[]
+  closes_at: string
 }

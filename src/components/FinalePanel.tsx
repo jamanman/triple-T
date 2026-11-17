@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
-import type { Game, JuryVote, Player } from '../lib/types'
+import type { Game, JuryRunoff, JuryVote, Player } from '../lib/types'
 import type { Act } from './GameScreen'
 import Token from './Token'
 
-interface Props { game: Game; players: Player[]; me: Player; myVotes: JuryVote[]; act: Act; busy: boolean; now: number }
+interface Props {
+  game: Game; players: Player[]; me: Player; myVotes: JuryVote[]; runoff?: JuryRunoff; act: Act; busy: boolean; now: number
+}
 
-export default function FinalePanel({ game, players, me, myVotes, act, busy }: Props) {
+export default function FinalePanel({ game, players, me, myVotes, runoff, act, busy }: Props) {
   const survivors = players.filter((p) => p.alive)
-  const myVote = myVotes.find((v) => v.kind === 'winner')?.target_id
+  const round = runoff?.round ?? 0
+  const myVote = myVotes.find((v) => v.kind === 'winner' && v.round === round)?.target_id
+  const tiedNames = runoff ? players.filter((p) => runoff.candidates.includes(p.id)).map((p) => p.name) : []
   const [plea, setPlea] = useState(me.plea ?? '')
   const [saved, setSaved] = useState(false)
   useEffect(() => setPlea(me.plea ?? ''), [me.plea])
@@ -28,6 +32,11 @@ export default function FinalePanel({ game, players, me, myVotes, act, busy }: P
   return (
     <div className="card finale">
       <h2>⚖️ The jury decides</h2>
+      {runoff && (
+        <p className="revote-banner small">
+          <b>Tie!</b> Revote {round > 1 ? `#${round} ` : ''}between {tiedNames.join(' and ')}. If it ties the same way again, they share the win.
+        </p>
+      )}
       {me.alive ? (
         <>
           <p className="small">You survived. Tell the jury why you should win.</p>
@@ -42,7 +51,7 @@ export default function FinalePanel({ game, players, me, myVotes, act, busy }: P
         <p className="small">Read the pleas, then vote for a winner. You can change your vote until everyone has voted or time runs out.</p>
       )}
       <Pleas survivors={survivors} vote={me.alive ? undefined : {
-        current: myVote, busy, cast: (id) => act('cast_vote', { p_kind: 'winner', p_target: id }),
+        current: myVote, busy, allowed: runoff?.candidates, cast: (id) => act('cast_vote', { p_kind: 'winner', p_target: id }),
       }} />
     </div>
   )
@@ -50,7 +59,7 @@ export default function FinalePanel({ game, players, me, myVotes, act, busy }: P
 
 function Pleas({ survivors, vote }: {
   survivors: Player[]
-  vote?: { current?: string; busy: boolean; cast: (id: string) => void }
+  vote?: { current?: string; busy: boolean; allowed?: string[]; cast: (id: string) => void }
 }) {
   return (
     <ul className="pleas">
@@ -58,7 +67,7 @@ function Pleas({ survivors, vote }: {
         <li key={p.id} className={vote?.current === p.id ? 'voted' : ''}>
           <div className="me-row"><Token player={p} size={28} /><strong>{p.name}</strong></div>
           <blockquote>{p.plea || <span className="muted">No plea yet.</span>}</blockquote>
-          {vote && (
+          {vote && (!vote.allowed || vote.allowed.includes(p.id)) && (
             <button disabled={vote.busy || vote.current === p.id} onClick={() => vote.cast(p.id)}>
               {vote.current === p.id ? '✓ Your vote' : `Vote ${p.name}`}
             </button>

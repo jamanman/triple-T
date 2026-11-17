@@ -73,6 +73,10 @@ export function dropSchedule(g: { ap_drops_per_day: number; ap_window_start: str
   return `AP drops ${times} at random between ${clock(g.ap_window_start)} and ${clock(g.ap_window_end)} (${g.timezone})`
 }
 
+export function dayLabel(g: { current_day: number; total_days: number | null }): string {
+  return g.total_days == null ? `Day ${g.current_day}` : `Day ${g.current_day} / ${g.total_days}`
+}
+
 export function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }

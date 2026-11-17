@@ -216,8 +216,18 @@ select test.fails(format($$select public.submit_plea(%L, 'x')$$, current_setting
 select public.cast_vote(current_setting('t.game')::uuid, 'winner', test.pid(3));
 select test.ok((select status from games) = 'finale', 'waits for all jurors');
 select test.as_user(5);
+select public.cast_vote(current_setting('t.game')::uuid, 'winner', test.pid(1));
+select test.ok((select status from games) = 'finale', 'a tied winner vote does not end the game');
+select test.ok((select round = 1 and candidates = (select array_agg(c order by c) from unnest(array[test.pid(1), test.pid(3)]) c) from jury_runoffs),
+  'tie goes to a revote between only the tied players');
+select test.fails(format($$select public.cast_vote(%L, 'winner', %L)$$, current_setting('t.game'), test.pid(4)), 'only between the tied', 'revote is limited to the tied players');
 select public.cast_vote(current_setting('t.game')::uuid, 'winner', test.pid(3));
-select test.ok((select status = 'finished' and winner_ids = array[test.pid(3)] from games), 'jury picks the winner');
+select test.ok((select status from games) = 'finale', 'revote waits for all jurors');
+select test.as_user(1);
+select test.ok(exists (select 1 from jury_runoffs), 'survivors can see the revote');
+select test.as_user(2);
+select public.cast_vote(current_setting('t.game')::uuid, 'winner', test.pid(3));
+select test.ok((select status = 'finished' and winner_ids = array[test.pid(3)] from games), 'the revote picks the winner');
 select test.ok((select bool_and(hearts is not null and ap is not null) from players_view), 'all stats revealed when the game ends');
 
 ------------------------------------------------------------ lobby settings (second game)
@@ -228,22 +238,23 @@ reset role;
 select set_config('t.code2', (select code from games where id = current_setting('t.g2')::uuid), false);
 set role authenticated;
 select test.as_user(7); select public.join_game(current_setting('t.code2'), 'Gil');
-select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')),
+select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 3, '09:00', '17:30', 'UTC', 5)$$, current_setting('t.g2')),
   'Only the host', 'only the host edits settings');
 select test.as_user(6);
-select test.fails(format($$select public.update_settings(%L, 21, 6, 2, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 10 and 20', 'grid size 10-20');
-select test.fails(format($$select public.update_settings(%L, 9, 6, 2, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 10 and 20', 'grid size at least 10');
-select test.fails(format($$select public.update_settings(%L, 12, 26, 2, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 4 and 25', 'max players up to 25');
-select test.fails(format($$select public.update_settings(%L, 12, 6, 11, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 1 and 10', 'max hearts up to 10');
-select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 0, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 1 and 12', 'at least 1 drop a day');
-select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 3, '18:00', '09:00', 'UTC')$$, current_setting('t.g2')), 'must start before', 'window must be in order');
-select public.update_settings(current_setting('t.g2')::uuid, 12, 6, 2, 3, '09:00', '17:30', 'UTC');
+select test.fails(format($$select public.update_settings(%L, 21, 6, 2, 3, '09:00', '17:30', 'UTC', 5)$$, current_setting('t.g2')), 'between 10 and 20', 'grid size 10-20');
+select test.fails(format($$select public.update_settings(%L, 9, 6, 2, 3, '09:00', '17:30', 'UTC', 5)$$, current_setting('t.g2')), 'between 10 and 20', 'grid size at least 10');
+select test.fails(format($$select public.update_settings(%L, 12, 26, 2, 3, '09:00', '17:30', 'UTC', 5)$$, current_setting('t.g2')), 'between 4 and 25', 'max players up to 25');
+select test.fails(format($$select public.update_settings(%L, 12, 6, 11, 3, '09:00', '17:30', 'UTC', 5)$$, current_setting('t.g2')), 'between 1 and 10', 'max hearts up to 10');
+select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 0, '09:00', '17:30', 'UTC', 5)$$, current_setting('t.g2')), 'between 1 and 12', 'at least 1 drop a day');
+select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 3, '18:00', '09:00', 'UTC', 5)$$, current_setting('t.g2')), 'must start before', 'window must be in order');
+select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 3, '09:00', '17:30', 'UTC', 0)$$, current_setting('t.g2')), 'between 1 and 365', 'game length 1-365 days or no limit');
+select public.update_settings(current_setting('t.g2')::uuid, 12, 6, 2, 3, '09:00', '17:30', 'UTC', null);
 select test.ok((select board_size = 12 and max_players = 6 and max_hearts = 2 and ap_drops_per_day = 3 from games where id = current_setting('t.g2')::uuid), 'settings saved');
 select test.as_user(8); select public.join_game(current_setting('t.code2'), 'Hal');
 select test.as_user(9); select public.join_game(current_setting('t.code2'), 'Ida');
 select test.as_user(6);
 select public.start_game(current_setting('t.g2')::uuid);
-select test.fails(format($$select public.update_settings(%L, 15, 6, 4, 2, '08:00', '20:00', 'UTC')$$, current_setting('t.g2')), 'while the game is lobby', 'settings lock when the game starts');
+select test.fails(format($$select public.update_settings(%L, 15, 6, 4, 2, '08:00', '20:00', 'UTC', 5)$$, current_setting('t.g2')), 'while the game is lobby', 'settings lock when the game starts');
 select test.ok((select bool_and(x < 12 and y < 12) from test.players where game_id = current_setting('t.g2')::uuid), 'players placed on the 12x12 grid');
 select test.ok((select bool_and(hearts = 2) from test.players where game_id = current_setting('t.g2')::uuid), 'start hearts capped by max hearts');
 reset role;
@@ -254,6 +265,52 @@ set role authenticated;
 select test.as_user(6);
 select public.act_add_heart(current_setting('t.g2')::uuid);
 select test.fails(format($$select public.act_add_heart(%L)$$, current_setting('t.g2')), 'maximum of 2', 'buying respects max hearts');
+
+-- daily revotes: Hal and Ida die, split their haunt vote
+reset role;
+update players set hearts = 0 where id in (test.pid(8), test.pid(9));
+set role authenticated;
+select test.as_user(8);
+select public.cast_vote(current_setting('t.g2')::uuid, 'haunt', test.pid(6));
+select public.cast_vote(current_setting('t.g2')::uuid, 'bonus', test.pid(6));
+select test.as_user(9);
+select public.cast_vote(current_setting('t.g2')::uuid, 'haunt', test.pid(7));
+reset role;
+update games set day1_date = (now() at time zone 'UTC')::date - 1 where id = current_setting('t.g2')::uuid;
+select internal.tick();
+select test.ok((select haunted_id is null and bonus_id = test.pid(6) from jury_results where game_id = current_setting('t.g2')::uuid and day = 1), 'a tied haunt waits; a clear bonus is applied');
+select test.ok((select kind = 'haunt' and round = 1 and candidates = (select array_agg(c order by c) from unnest(array[test.pid(6), test.pid(7)]) c)
+                from jury_runoffs where game_id = current_setting('t.g2')::uuid), 'tied daily vote goes to a revote');
+set role authenticated;
+select test.as_user(6);
+select test.ok(not exists (select 1 from jury_runoffs), 'living players don''t see daily revotes');
+select test.fails(format($$select public.cast_revote(%L, 'haunt', %L)$$, current_setting('t.g2'), test.pid(7)), 'Only dead', 'only the jury revotes');
+select test.as_user(8);
+select test.ok(exists (select 1 from jury_runoffs), 'jurors see the revote');
+select public.cast_revote(current_setting('t.g2')::uuid, 'haunt', test.pid(7));
+select test.ok(exists (select 1 from jury_runoffs), 'revote stays open until all jurors vote or it closes');
+reset role;
+update jury_runoffs set closes_at = now() - interval '1 second' where game_id = current_setting('t.g2')::uuid;
+select internal.tick();
+select test.ok((select haunted_id = test.pid(7) from jury_results where game_id = current_setting('t.g2')::uuid and day = 1), 'the revote decides the haunt');
+select test.ok(not exists (select 1 from jury_runoffs where game_id = current_setting('t.g2')::uuid), 'revote closed');
+
+-- no day limit
+update games set day1_date = (now() at time zone 'UTC')::date - 7 where id = current_setting('t.g2')::uuid;
+select internal.tick();
+select test.ok((select status = 'active' and current_day = 8 and total_days is null from games where id = current_setting('t.g2')::uuid), 'no day limit: the game keeps going past day 5');
+set role authenticated;
+
+-- a revote that ends in the same tie is a shared win
+reset role;
+select internal.start_finale(current_setting('t.g2')::uuid, 'test');
+set role authenticated;
+select test.as_user(8); select public.cast_vote(current_setting('t.g2')::uuid, 'winner', test.pid(6));
+select test.as_user(9); select public.cast_vote(current_setting('t.g2')::uuid, 'winner', test.pid(7));
+select test.ok((select status = 'finale' from games where id = current_setting('t.g2')::uuid), 'tie: revote');
+select test.as_user(8); select public.cast_vote(current_setting('t.g2')::uuid, 'winner', test.pid(6));
+select test.as_user(9); select public.cast_vote(current_setting('t.g2')::uuid, 'winner', test.pid(7));
+select test.ok((select status = 'finished' and cardinality(winner_ids) = 2 from games where id = current_setting('t.g2')::uuid), 'same tie again: shared victory');
 
 reset role;
 \echo ALL TESTS PASSED

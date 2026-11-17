@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { rpc } from '../lib/supabase'
 import { useGame, useNow } from '../lib/useGame'
-import { countdown, dropSchedule } from '../lib/util'
+import { countdown, dayLabel, dropSchedule } from '../lib/util'
 import { goTo, signOut } from '../App'
 import Lobby from './Lobby'
 import Board, { type Cell } from './Board'
@@ -71,7 +71,7 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
         <span className="mono pill">{game.code}</span>
         {game.status === 'active' && (
           <>
-            <span className="pill">Day {game.current_day} / {game.total_days}</span>
+            <span className="pill">{dayLabel(game)}</span>
             <span className="muted small">Jury tally in {countdown(game.day_ends_at, now)}</span>
           </>
         )}
@@ -91,12 +91,12 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
 
         <aside className="side-col">
           {(game.status === 'finale' || game.status === 'finished') && (
-            <FinalePanel game={game} players={players} me={me} myVotes={state.myVotes} act={act} busy={busy} now={now} />
+            <FinalePanel game={game} players={players} me={me} myVotes={state.myVotes} runoff={state.runoffs.find((r) => r.kind === 'winner')} act={act} busy={busy} now={now} />
           )}
           {game.status === 'active' && (
             me.alive
               ? <ActionPanel game={game} players={players} me={me} selected={selected} setSelected={setSelected} act={act} busy={busy} />
-              : <JuryPanel game={game} players={players} me={me} myVotes={state.myVotes} act={act} busy={busy} />
+              : <JuryPanel game={game} players={players} me={me} myVotes={state.myVotes} runoffs={state.runoffs} act={act} busy={busy} now={now} />
           )}
           <PlayerList players={players} me={me} results={state.results} game={game}
             onPick={(p) => setSelected({ x: p.x!, y: p.y! })} />

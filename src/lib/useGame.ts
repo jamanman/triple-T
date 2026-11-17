@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
-import type { Game, GameEvent, JuryResult, JuryVote, Player } from './types'
+import type { Game, GameEvent, JuryResult, JuryRunoff, JuryVote, Player } from './types'
 
 export interface GameState {
   game: Game | null
@@ -8,11 +8,12 @@ export interface GameState {
   events: GameEvent[]
   results: JuryResult[]
   myVotes: JuryVote[]
+  runoffs: JuryRunoff[]
   loading: boolean
   missing: boolean
 }
 
-const EMPTY: GameState = { game: null, players: [], events: [], results: [], myVotes: [], loading: true, missing: false }
+const EMPTY: GameState = { game: null, players: [], events: [], results: [], myVotes: [], runoffs: [], loading: true, missing: false }
 
 /**
  * Loads everything for one game and keeps it live: any realtime change to the
@@ -27,12 +28,13 @@ export function useGame(gameId: string) {
   const timer = useRef<number | undefined>(undefined)
 
   const load = useCallback(async () => {
-    const [g, p, e, r, v] = await Promise.all([
+    const [g, p, e, r, v, ro] = await Promise.all([
       supabase.from('games').select('*').eq('id', gameId).maybeSingle(),
       supabase.from('players_view').select('*').eq('game_id', gameId).order('joined_at'),
       supabase.from('events').select('*').eq('game_id', gameId).order('id', { ascending: false }).limit(150),
       supabase.from('jury_results').select('*').eq('game_id', gameId).order('day'),
-      supabase.from('jury_votes').select('day, kind, target_id').eq('game_id', gameId),
+      supabase.from('jury_votes').select('day, kind, round, target_id').eq('game_id', gameId),
+      supabase.from('jury_runoffs').select('day, kind, round, candidates, closes_at').eq('game_id', gameId),
     ])
     setState({
       game: (g.data as Game | null) ?? null,
@@ -40,6 +42,7 @@ export function useGame(gameId: string) {
       events: (e.data as GameEvent[]) ?? [],
       results: (r.data as JuryResult[]) ?? [],
       myVotes: (v.data as JuryVote[]) ?? [],
+      runoffs: (ro.data as JuryRunoff[]) ?? [],
       loading: false,
       missing: !g.error && !g.data,
     })
@@ -60,6 +63,7 @@ export function useGame(gameId: string) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'events', filter }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jury_results', filter }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jury_votes', filter }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jury_runoffs', filter }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'player_pings', filter }, reload)
       .subscribe((status) => { if (status === 'SUBSCRIBED') reload() })
 

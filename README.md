@@ -1,6 +1,6 @@
 # Triple-T
 
-A slow-burn multiplayer battle on a square grid, for 4–25 players over 5 days. Built with React and Vite on Supabase: Postgres, Realtime, email auth and pg_cron.
+A slow-burn multiplayer battle on a square grid, for 4–25 players, over as many days as the host chooses (or with no limit). Built with React and Vite on Supabase: Postgres, Realtime, email auth and pg_cron.
 
 Players sign in with email and password, so they can resume a game from any device. Each player's hearts, AP and range are secret until the game ends.
 
@@ -37,6 +37,7 @@ All rules are enforced in the database. The browser can only read game state and
 | Activity feed, gift cap | `supabase/migrations/20261116000300_feed_and_gift_cap.sql` |
 | Host settings | `supabase/migrations/20261117000000_lobby_settings.sql` |
 | Gift and jury bonus notices | `supabase/migrations/20261117000100_gift_sender_bonus_notice.sql` |
+| Game length, jury revotes | `supabase/migrations/20261117000200_game_length_and_revotes.sql` |
 | Lobby settings | RPC: `update_settings` (host only, before the game starts) |
 | Player actions | RPCs: `act_move`, `act_shoot`, `act_add_heart`, `act_upgrade_range`, `gift` |
 | Lobby | RPCs: `create_game`, `join_game`, `leave_game`, `start_game` |
@@ -65,6 +66,7 @@ The rules leave some points open. This is how they are implemented; most are a o
   | AP drops per day | 1 to 12 | 2 |
   | AP window | any start and end time on the same day | 8am–8pm |
   | Time zone | any | the host's browser |
+  | Game length | 1 to 365 days, or no limit | 5 days |
 
   Everyone else sees the saved settings update live. Players start with 3 hearts, or the max if it's lower.
 - **Days follow the game's time zone.** Each day runs from midnight to midnight, and its AP drops land at random times inside the window. If the game starts after the window has closed for the day, day 1 is the next day. The window can't cross midnight.
@@ -72,14 +74,15 @@ The rules leave some points open. This is how they are implemented; most are a o
 - **Gifts are free and private.** Only the receiver is told, and they're told who sent it. The hearts or AP you send are the cost. You must keep at least 1 heart, AP can't be sent to the dead, reviving takes exactly 1 heart, and gifts can't take anyone above the game's max hearts. (A refused heart gift does tell the giver the receiver is near the cap.)
 - **Stats are secret.** You see only your own hearts, AP and range. Everyone sees positions, moves, who is alive or dead, revives and AP drops. All stats are revealed when the game ends.
 - **Jury results are for the jury.** Only dead players can see who was haunted or got the bonus. The haunted player is told privately at each AP drop they miss. The bonus player is told privately, and everyone else is told that someone got the bonus, without saying who.
-- **Jury votes are daily.** The dead vote during the day and votes are tallied at midnight. The *haunted* player gets no AP drops the **next** day. The *bonus* player gets +2 AP straight away. Only votes from players who are still dead at the tally count. Ties are broken at random.
-- **The finale starts** as soon as only 3 players are alive, or when day 5 ends. All actions freeze. Survivors write a plea, and the jury votes for a winner. The finale ends when every juror has voted, or after 24 hours.
-- **A tied winner vote is a shared victory.** If the jury is empty or nobody voted, all survivors share the win.
+- **Jury votes are daily.** The dead vote during the day and votes are tallied at midnight. The *haunted* player gets no AP drops the **next** day. The *bonus* player gets +2 AP straight away. Only votes from players who are still dead at the tally count.
+- **Daily ties go to one revote** between only the tied players, using `cast_revote`. Only the jury sees it. It's open from midnight until the next morning's AP window opens (at least 1 hour), so a haunt is settled before any drop, and it closes early once every juror has voted. If it's still tied, or nobody revotes, nobody is haunted or awarded for that vote.
+- **The finale starts** as soon as only 3 players are alive, or when the last day ends. With no day limit, only the 3-players rule applies. All actions freeze. Survivors write a plea, and the jury votes for a winner. The finale ends when every juror has voted, or after 24 hours.
+- **A tied winner vote goes to a revote** between only the tied players. Everyone can see the revote. Each revote gets a fresh finale period, or ends once every juror has voted. Revotes repeat as long as they narrow the field. If a revote ends in exactly the same tie, or nobody votes in it, the tied players share the win. If the jury is empty or nobody voted at all, every survivor shares the win.
 - **Games need at least 4 players to start.** With 3 players or fewer, the finale would begin immediately. The host picks the maximum, from 4 to 25.
 
 ## Testing
 
-`supabase/tests/game_test.sql` plays a full game as five users, plus a second game to check the host settings, and checks 90 rules, including the RLS restrictions. It runs against a **throwaway** plain Postgres 15+ database, with stand-ins for Supabase's `auth` schema and roles:
+`supabase/tests/game_test.sql` plays a full game as five users, plus a second game to check the host settings, and checks 107 rules, including the RLS restrictions. It runs against a **throwaway** plain Postgres 15+ database, with stand-ins for Supabase's `auth` schema and roles:
 
 ```sh
 PGHOST=localhost PGUSER=postgres PGDATABASE=scratch supabase/tests/run-local.sh

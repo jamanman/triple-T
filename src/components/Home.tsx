@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { rpc, supabase } from '../lib/supabase'
 import type { Game } from '../lib/types'
-import { browserTimeZone } from '../lib/util'
+import { browserTimeZone, dayLabel } from '../lib/util'
 import { goTo, signOut } from '../App'
 
 const STATUS_LABEL: Record<Game['status'], string> = {
@@ -47,7 +47,7 @@ export default function Home({ initialCode, email, displayName }: Props) {
       </div>
       <header className="hero">
         <h1>Triple-T</h1>
-        <p className="muted">A slow-burn battle on a grid. Five days. AP drops at random times. The dead decide who wins.</p>
+        <p className="muted">A slow-burn battle on a grid. AP drops at random times. The dead decide who wins.</p>
       </header>
 
       <div className="card">
@@ -85,7 +85,7 @@ export default function Home({ initialCode, email, displayName }: Props) {
               <li key={g.id}>
                 <a href={`#/game/${g.id}`}>
                   <span className="mono">{g.code}</span>
-                  <span className="muted">{STATUS_LABEL[g.status]}{g.status === 'active' ? ` · day ${g.current_day}/${g.total_days}` : ''}</span>
+                  <span className="muted">{STATUS_LABEL[g.status]}{g.status === 'active' ? ` · ${dayLabel(g).toLowerCase()}` : ''}</span>
                 </a>
               </li>
             ))}
@@ -104,7 +104,8 @@ export default function Home({ initialCode, email, displayName }: Props) {
           <li>At 0 hearts you're dead: your AP goes to your killer and your body stays on the board.</li>
           <li>The activity feed shows AP drops, moves, deaths and revives. If you're shot, only you are told, and never by whom. If you're sent a gift, only you are told, and you see who sent it.</li>
           <li>The dead form the jury. Each day they vote to <b>haunt</b> one player (no AP the next day) and to give one player <b>+2 AP</b>.</li>
-          <li>When 3 players remain, or after day 5, survivors plead their case and the jury votes for the winner.</li>
+          <li>When 3 players remain, or after the last day (the host sets the game length, or no limit), survivors plead their case and the jury votes for the winner.</li>
+          <li>If a jury vote is tied, the jury revotes between only the tied players.</li>
         </ul>
       </details>
     </main>
