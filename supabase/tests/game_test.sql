@@ -159,9 +159,9 @@ select test.ok(not exists (select 1 from jury_results), 'living players can''t s
 select test.as_user(2);
 select test.ok(exists (select 1 from jury_results), 'the jury sees its results');
 select test.as_user(3);
-select test.ok(exists (select 1 from events where kind = 'bonus'), 'bonus winner is told privately');
+select test.ok((select message from events where kind = 'bonus') = 'The jury awarded you 2 bonus AP.', 'bonus winner is told privately');
 select test.as_user(4);
-select test.ok(not exists (select 1 from events where kind = 'bonus'), 'nobody else hears about the bonus');
+select test.ok((select message from events where kind = 'bonus') = 'Someone received 2 bonus AP from the jury.', 'others are told someone got the bonus, not who');
 reset role;
 select test.ok((select count(*) from ap_drops where day = 2) = 2, 'two drops scheduled for day 2');
 select test.ok((select bool_and(scheduled_at >= ((now() at time zone 'UTC')::date + time '08:00') at time zone 'UTC'
@@ -182,7 +182,7 @@ select test.ok((select hearts from test.players where id = test.pid(1)) = 3, 'gi
 select public.gift(current_setting('t.game')::uuid, test.pid(2), 'ap', 2);
 select test.ok((select ap from test.players where id = test.pid(2)) = 2, 'AP gift');
 select test.as_user(2);
-select test.ok(exists (select 1 from events where kind = 'gift' and message = 'Someone sent you 2 AP.' and actor_id is null), 'gift receiver is told anonymously');
+select test.ok(exists (select 1 from events where kind = 'gift' and message = 'Alice sent you 2 AP.'), 'gift receiver is told who sent it');
 select test.as_user(4);
 select test.ok(not exists (select 1 from events where kind = 'gift'), 'nobody else hears about the gift');
 select test.ok(exists (select 1 from events where kind = 'revive' and message = 'Bob was revived!' and actor_id is null), 'revives are announced anonymously');
