@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { rpc } from '../lib/supabase'
 import { useGame, useNow } from '../lib/useGame'
 import { countdown, dayLabel, dropSchedule } from '../lib/util'
@@ -10,8 +10,11 @@ import PlayerList from './PlayerList'
 import EventLog from './EventLog'
 import JuryPanel from './JuryPanel'
 import FinalePanel from './FinalePanel'
+import ConfirmDialog, { type ConfirmOptions } from './ConfirmDialog'
+import NotificationToggle from './NotificationToggle'
 
-export type Act = (fn: string, args: Record<string, unknown>) => Promise<boolean>
+/** Run a game RPC. With `confirm`, the player is asked first and nothing happens if they cancel. */
+export type Act = (fn: string, args: Record<string, unknown>, confirm?: ConfirmOptions) => Promise<boolean>
 
 export default function GameScreen({ gameId, userId }: { gameId: string; userId: string }) {
   const state = useGame(gameId)
@@ -20,6 +23,7 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
   const [selected, setSelected] = useState<Cell | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [asking, setAsking] = useState<(ConfirmOptions & { resolve: (ok: boolean) => void }) | null>(null)
 
   const me = useMemo(() => players.find((p) => p.user_id === userId) ?? null, [players, userId])
 
@@ -29,7 +33,12 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
     return () => window.clearTimeout(t)
   }, [error])
 
-  const act: Act = async (fn, args) => {
+  const answer = useCallback((ok: boolean) => {
+    setAsking((a) => { a?.resolve(ok); return null })
+  }, [])
+
+  const act: Act = async (fn, args, confirm) => {
+    if (confirm && !(await new Promise<boolean>((resolve) => setAsking({ ...confirm, resolve })))) return false
     setBusy(true); setError(null)
     try {
       await rpc(fn, { p_game: gameId, ...args })
@@ -57,7 +66,12 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
   }
 
   const alive = players.filter((p) => p.alive).length
-  const toast = error && <div className="toast" role="alert" onClick={() => setError(null)}>{error}</div>
+  const toast = (
+    <>
+      {error && <div className="toast" role="alert" onClick={() => setError(null)}>{error}</div>}
+      {asking && <ConfirmDialog {...asking} onAnswer={answer} />}
+    </>
+  )
 
   if (game.status === 'lobby') {
     return <>{toast}<Lobby game={game} players={players} me={me} act={act} busy={busy} /></>
@@ -101,6 +115,7 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
           <PlayerList players={players} me={me} results={state.results} game={game}
             onPick={(p) => setSelected({ x: p.x!, y: p.y! })} />
           <EventLog events={state.events} now={now} />
+          <NotificationToggle compact />
         </aside>
       </div>
     </main>

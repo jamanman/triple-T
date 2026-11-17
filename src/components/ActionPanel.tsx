@@ -33,7 +33,7 @@ export default function ActionPanel({ game, players, me: meRow, selected, setSel
   // Arrow keys / WASD pick the neighbouring square; Enter moves there.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input, textarea, select')) return
+      if ((e.target as HTMLElement).closest('input, textarea, select') || document.querySelector('.modal')) return
       const d: Record<string, [number, number]> = {
         ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
         w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
@@ -67,10 +67,18 @@ export default function ActionPanel({ game, players, me: meRow, selected, setSel
       </div>
 
       <div className="row">
-        <button disabled={busy || me.ap < 3 || me.hearts >= game.max_hearts} onClick={() => act('act_add_heart', {})}>
+        <button disabled={busy || me.ap < 3 || me.hearts >= game.max_hearts} onClick={() => act('act_add_heart', {}, {
+          title: 'Buy a heart?',
+          detail: `Costs 3 AP. You'll have ${me.hearts + 1} of ${game.max_hearts} hearts and ${me.ap - 3} AP left.`,
+          confirmLabel: 'Buy heart',
+        })}>
           ♥ Add heart <small>3 AP</small>
         </button>
-        <button disabled={busy || me.ap < 3} onClick={() => act('act_upgrade_range', {})}>
+        <button disabled={busy || me.ap < 3} onClick={() => act('act_upgrade_range', {}, {
+          title: 'Upgrade your range?',
+          detail: `Costs 3 AP. Your range goes from ${me.range} to ${me.range + 1}, and you'll have ${me.ap - 3} AP left.`,
+          confirmLabel: 'Upgrade',
+        })}>
           ⌖ Range +1 <small>3 AP</small>
         </button>
       </div>
@@ -81,8 +89,15 @@ export default function ActionPanel({ game, players, me: meRow, selected, setSel
         {selected && !target && (
           isAdjacent ? (
             <button className="primary wide" disabled={busy || me.ap < 1}
-              onClick={async () => { if (await act('act_move', { p_x: selected.x, p_y: selected.y })) setSelected(null) }}
-              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.click()} autoFocus>
+              onClick={async () => {
+                const moved = await act('act_move', { p_x: selected.x, p_y: selected.y }, {
+                  title: 'Move here?',
+                  detail: `Costs 1 AP (${me.ap - 1} left). Everyone will see that you moved.`,
+                  confirmLabel: 'Move',
+                })
+                if (moved) setSelected(null)
+              }}
+              autoFocus>
               Move here <small>1 AP</small>
             </button>
           ) : (
@@ -110,7 +125,12 @@ export default function ActionPanel({ game, players, me: meRow, selected, setSel
             {inRange && target.alive && (
               <>
                 <button className="danger wide" disabled={busy || me.ap < 1}
-                  onClick={() => act('act_shoot', { p_target: target.id })}>
+                  onClick={() => act('act_shoot', { p_target: target.id }, {
+                    title: `Shoot ${target.name}?`,
+                    detail: `Costs 1 AP (${me.ap - 1} left) and takes 1 heart from ${target.name}. They'll be told they were shot, but not by whom.`,
+                    confirmLabel: 'Shoot',
+                    danger: true,
+                  })}>
                   Shoot {target.name} <small>1 AP</small>
                 </button>
                 <div className="gift-row">
@@ -118,11 +138,19 @@ export default function ActionPanel({ game, players, me: meRow, selected, setSel
                   <input type="number" min={1} max={Math.max(1, me.ap, me.hearts - 1)} value={amount} aria-label="Gift amount"
                     onChange={(e) => setAmount(Math.max(1, Math.floor(+e.target.value || 1)))} />
                   <button disabled={busy || me.hearts - amount < 1}
-                    onClick={() => act('gift', { p_target: target.id, p_kind: 'heart', p_amount: amount })}>
+                    onClick={() => act('gift', { p_target: target.id, p_kind: 'heart', p_amount: amount }, {
+                      title: `Send ${target.name} ${plural(amount, 'heart')}?`,
+                      detail: `You'll have ${plural(me.hearts - amount, 'heart')} left. ${target.name} will be told it came from you.`,
+                      confirmLabel: 'Send',
+                    })}>
                     ♥ {amount === 1 ? 'heart' : 'hearts'}
                   </button>
                   <button disabled={busy || me.ap < amount}
-                    onClick={() => act('gift', { p_target: target.id, p_kind: 'ap', p_amount: amount })}>
+                    onClick={() => act('gift', { p_target: target.id, p_kind: 'ap', p_amount: amount }, {
+                      title: `Send ${target.name} ${amount} AP?`,
+                      detail: `You'll have ${me.ap - amount} AP left. ${target.name} will be told it came from you.`,
+                      confirmLabel: 'Send',
+                    })}>
                     AP
                   </button>
                 </div>
@@ -131,7 +159,11 @@ export default function ActionPanel({ game, players, me: meRow, selected, setSel
 
             {inRange && !target.alive && (
               <button className="primary wide" disabled={busy || me.hearts < 2}
-                onClick={() => act('gift', { p_target: target.id, p_kind: 'heart', p_amount: 1 })}>
+                onClick={() => act('gift', { p_target: target.id, p_kind: 'heart', p_amount: 1 }, {
+                  title: `Revive ${target.name}?`,
+                  detail: `Costs you 1 heart (${plural(me.hearts - 1, 'heart')} left). ${target.name} comes back with 1 heart and 0 AP. Everyone sees they were revived, but not by whom.`,
+                  confirmLabel: 'Revive',
+                })}>
                 Revive {target.name} <small>costs you 1 heart</small>
               </button>
             )}
