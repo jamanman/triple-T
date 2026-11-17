@@ -15,10 +15,10 @@ interface Props {
   busy: boolean
 }
 
-export function Hearts({ n }: { n: number }) {
+export function Hearts({ n, max }: { n: number; max: number }) {
   return (
     <span className="hearts" aria-label={plural(n, 'heart')}>
-      {Array.from({ length: Math.max(4, n) }, (_, i) => <span key={i} className={i < n ? 'on' : 'off'}>♥</span>)}
+      {Array.from({ length: Math.max(max, n) }, (_, i) => <span key={i} className={i < n ? 'on' : 'off'}>♥</span>)}
     </span>
   )
 }
@@ -59,7 +59,7 @@ export default function ActionPanel({ game, players, me: meRow, selected, setSel
         <div>
           <strong>{me.name}</strong>
           <div className="stats">
-            <Hearts n={me.hearts} />
+            <Hearts n={me.hearts} max={game.max_hearts} />
             <span className="stat"><b>{me.ap}</b> AP</span>
             <span className="stat">range <b>{me.range}</b></span>
           </div>
@@ -67,7 +67,7 @@ export default function ActionPanel({ game, players, me: meRow, selected, setSel
       </div>
 
       <div className="row">
-        <button disabled={busy || me.ap < 3 || me.hearts >= 4} onClick={() => act('act_add_heart', {})}>
+        <button disabled={busy || me.ap < 3 || me.hearts >= game.max_hearts} onClick={() => act('act_add_heart', {})}>
           ♥ Add heart <small>3 AP</small>
         </button>
         <button disabled={busy || me.ap < 3} onClick={() => act('act_upgrade_range', {})}>

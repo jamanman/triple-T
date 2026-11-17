@@ -2,7 +2,7 @@ import type { GameEvent } from '../lib/types'
 import { timeAgo } from '../lib/util'
 
 const ICON: Record<string, string> = {
-  move: '→', shot: '💥', death: '☠️', revive: '✨', ap_drop: '⚡', bonus: '⭐', haunted: '👻',
+  move: '→', shot: '💥', death: '☠️', revive: '✨', ap_drop: '⚡', bonus: '⭐', haunted: '👻', gift: '🎁',
 }
 
 export default function EventLog({ events, now }: { events: GameEvent[]; now: number }) {

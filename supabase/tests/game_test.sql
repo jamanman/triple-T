@@ -42,7 +42,7 @@ grant execute on all functions in schema test to authenticated;
 set role authenticated;
 select test.as_user(1);
 select set_config('t.game', public.create_game('Alice', 5, 'UTC')::text, false);
-select test.fails($$select public.create_game('X', 21, 'UTC')$$, 'between 4 and 20', 'max players capped at 20');
+select test.fails($$select public.create_game('X', 26, 'UTC')$$, 'between 4 and 25', 'max players capped at 25');
 select test.fails($$select public.create_game('X', 5, 'Mars/Base')$$, 'Unknown time zone', 'time zone validated');
 
 reset role;
@@ -111,8 +111,8 @@ select test.ok((select range = 3 and ap = 3 from test.players where id = test.pi
 select test.ok((select hearts = 4 and ap = 3 and range = 3 from players_view where id = test.pid(1)), 'you see your own stats');
 select test.ok((select hearts is null and ap is null and range is null from players_view where id = test.pid(3)), 'other players'' stats are hidden');
 select test.ok(not exists (select 1 from information_schema.columns where table_name = 'players_view' and column_name = 'killed_by'), 'killers are not revealed');
-select test.ok((select bool_and(kind in ('ap_drop', 'death', 'revive', 'move', 'shot', 'bonus', 'haunted')) from test.events),
-  'feed only has AP handouts, deaths, revives, moves and shots');
+select test.ok((select bool_and(kind in ('ap_drop', 'death', 'revive', 'move', 'shot', 'bonus', 'haunted', 'gift')) from test.events),
+  'feed only has AP handouts, gifts, deaths, revives, moves and shots');
 select test.ok(not exists (select 1 from test.events where kind <> 'move' and (actor_id is not null or message like '%Alice%')),
   'feed never names the shooter or killer');
 select test.ok(not exists (select 1 from events where kind = 'shot'), 'shooter gets no feed entry');
@@ -181,11 +181,10 @@ select test.ok((select alive and hearts = 1 and ap = 0 from test.players where i
 select test.ok((select hearts from test.players where id = test.pid(1)) = 3, 'giver loses the heart');
 select public.gift(current_setting('t.game')::uuid, test.pid(2), 'ap', 2);
 select test.ok((select ap from test.players where id = test.pid(2)) = 2, 'AP gift');
-select test.ok(not exists (select 1 from test.events where kind like 'gift%'), 'gifts are not in the feed');
 select test.as_user(2);
-select test.ok(exists (select 1 from player_pings), 'gift receiver''s screen is told to refresh');
+select test.ok(exists (select 1 from events where kind = 'gift' and message = 'Someone sent you 2 AP.' and actor_id is null), 'gift receiver is told anonymously');
 select test.as_user(4);
-select test.ok(not exists (select 1 from player_pings), 'nobody else is pinged');
+select test.ok(not exists (select 1 from events where kind = 'gift'), 'nobody else hears about the gift');
 select test.ok(exists (select 1 from events where kind = 'revive' and message = 'Bob was revived!' and actor_id is null), 'revives are announced anonymously');
 reset role;
 update players set hearts = 3 where id = test.pid(2);
@@ -220,6 +219,41 @@ select test.as_user(5);
 select public.cast_vote(current_setting('t.game')::uuid, 'winner', test.pid(3));
 select test.ok((select status = 'finished' and winner_ids = array[test.pid(3)] from games), 'jury picks the winner');
 select test.ok((select bool_and(hearts is not null and ap is not null) from players_view), 'all stats revealed when the game ends');
+
+------------------------------------------------------------ lobby settings (second game)
+set role authenticated;
+select test.as_user(6);
+select set_config('t.g2', public.create_game('Fay', 25, 'UTC')::text, false);
+reset role;
+select set_config('t.code2', (select code from games where id = current_setting('t.g2')::uuid), false);
+set role authenticated;
+select test.as_user(7); select public.join_game(current_setting('t.code2'), 'Gil');
+select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')),
+  'Only the host', 'only the host edits settings');
+select test.as_user(6);
+select test.fails(format($$select public.update_settings(%L, 21, 6, 2, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 10 and 20', 'grid size 10-20');
+select test.fails(format($$select public.update_settings(%L, 9, 6, 2, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 10 and 20', 'grid size at least 10');
+select test.fails(format($$select public.update_settings(%L, 12, 26, 2, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 4 and 25', 'max players up to 25');
+select test.fails(format($$select public.update_settings(%L, 12, 6, 11, 3, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 1 and 10', 'max hearts up to 10');
+select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 0, '09:00', '17:30', 'UTC')$$, current_setting('t.g2')), 'between 1 and 12', 'at least 1 drop a day');
+select test.fails(format($$select public.update_settings(%L, 12, 6, 2, 3, '18:00', '09:00', 'UTC')$$, current_setting('t.g2')), 'must start before', 'window must be in order');
+select public.update_settings(current_setting('t.g2')::uuid, 12, 6, 2, 3, '09:00', '17:30', 'UTC');
+select test.ok((select board_size = 12 and max_players = 6 and max_hearts = 2 and ap_drops_per_day = 3 from games where id = current_setting('t.g2')::uuid), 'settings saved');
+select test.as_user(8); select public.join_game(current_setting('t.code2'), 'Hal');
+select test.as_user(9); select public.join_game(current_setting('t.code2'), 'Ida');
+select test.as_user(6);
+select public.start_game(current_setting('t.g2')::uuid);
+select test.fails(format($$select public.update_settings(%L, 15, 6, 4, 2, '08:00', '20:00', 'UTC')$$, current_setting('t.g2')), 'while the game is lobby', 'settings lock when the game starts');
+select test.ok((select bool_and(x < 12 and y < 12) from test.players where game_id = current_setting('t.g2')::uuid), 'players placed on the 12x12 grid');
+select test.ok((select bool_and(hearts = 2) from test.players where game_id = current_setting('t.g2')::uuid), 'start hearts capped by max hearts');
+reset role;
+select test.ok((select count(*) from ap_drops where game_id = current_setting('t.g2')::uuid and day = 1) = 3, 'drops per day follows the setting');
+select test.ok((select bool_and((scheduled_at at time zone 'UTC')::time between '09:00' and '17:30') from ap_drops where game_id = current_setting('t.g2')::uuid), 'drops fall inside the chosen window');
+update players set hearts = 1, ap = 6 where game_id = current_setting('t.g2')::uuid;
+set role authenticated;
+select test.as_user(6);
+select public.act_add_heart(current_setting('t.g2')::uuid);
+select test.fails(format($$select public.act_add_heart(%L)$$, current_setting('t.g2')), 'maximum of 2', 'buying respects max hearts');
 
 reset role;
 \echo ALL TESTS PASSED

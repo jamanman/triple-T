@@ -30,7 +30,7 @@ export default function PlayerList({ game, players, me, results, onPick }: Props
               </span>
               {p.alive ? (
                 p.hearts != null && (
-                  <span className="row-stats"><Hearts n={p.hearts} /><span>{p.ap} AP</span><span>r{p.range}</span></span>
+                  <span className="row-stats"><Hearts n={p.hearts} max={game.max_hearts} /><span>{p.ap} AP</span><span>r{p.range}</span></span>
                 )
               ) : (
                 <span className="muted small">jury</span>

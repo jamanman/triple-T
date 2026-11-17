@@ -7,6 +7,11 @@ export interface Game {
   max_players: number
   timezone: string
   board_size: number
+  max_hearts: number
+  ap_drops_per_day: number
+  /** 'HH:MM:SS' local time in `timezone` */
+  ap_window_start: string
+  ap_window_end: string
   total_days: number
   status: GameStatus
   current_day: number
@@ -14,6 +19,7 @@ export interface Game {
   finale_ends_at: string | null
   winner_ids: string[] | null
   created_at: string
+  updated_at: string
 }
 
 export interface Player {

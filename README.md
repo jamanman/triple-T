@@ -1,6 +1,6 @@
 # Triple-T
 
-A slow-burn multiplayer battle on a 15×15 grid, for 4–20 players over 5 days. Built with React and Vite on Supabase: Postgres, Realtime, email auth and pg_cron.
+A slow-burn multiplayer battle on a square grid, for 4–25 players over 5 days. Built with React and Vite on Supabase: Postgres, Realtime, email auth and pg_cron.
 
 Players sign in with email and password, so they can resume a game from any device. Each player's hearts, AP and range are secret until the game ends.
 
@@ -35,6 +35,8 @@ All rules are enforced in the database. The browser can only read game state and
 | Cron job | `supabase/migrations/20261116000100_schedule_tick.sql` |
 | Hidden stats, cardinal range | `supabase/migrations/20261116000200_hidden_stats_cardinal_range.sql` |
 | Activity feed, gift cap | `supabase/migrations/20261116000300_feed_and_gift_cap.sql` |
+| Host settings, gift notices | `supabase/migrations/20261117000000_lobby_settings.sql` |
+| Lobby settings | RPC: `update_settings` (host only, before the game starts) |
 | Player actions | RPCs: `act_move`, `act_shoot`, `act_add_heart`, `act_upgrade_range`, `gift` |
 | Lobby | RPCs: `create_game`, `join_game`, `leave_game`, `start_game` |
 | Jury / finale | RPCs: `cast_vote`, `submit_plea` |
@@ -42,8 +44,8 @@ All rules are enforced in the database. The browser can only read game state and
 
 - Every action locks the game row, so two simultaneous shots resolve one after the other, never both against stale data.
 - **Hidden stats:** clients can't read the `players` table at all. They read `players_view`, which blanks other players' hearts, AP and range until the game is finished. Server error messages never reveal another player's stats either.
-- **Activity feed:** only AP handouts, moves, deaths and revives are posted, and the feed never says who shot, killed or revived whom. A player who is shot gets a private "You were shot!" notice; nobody else hears about it. A jury bonus or haunting is told only to the player it affects. Private entries use the `visible_to` column on `events`, enforced by RLS.
-- **Refresh signals:** other changes that clients must notice (joins, pleas, new days) bump `games.updated_at`, and gifts ping the receiver privately through `player_pings`.
+- **Activity feed:** only AP handouts, moves, deaths and revives are posted, and the feed never says who shot, killed, revived or gifted whom. A player who is shot gets a private "You were shot!" notice, and a gift receiver gets "Someone sent you 2 AP."; nobody else hears about either. A jury bonus or haunting is told only to the player it affects, and never says who voted for it. Private entries use the `visible_to` column on `events`, enforced by RLS.
+- **Refresh signals:** other changes that clients must notice (joins, pleas, new days) bump `games.updated_at`.
 - AP drop times are stored in `ap_drops`, which players can't read, so drops are a surprise.
 - Jury votes are secret: you can only read your own.
 
@@ -52,19 +54,31 @@ All rules are enforced in the database. The browser can only read game state and
 The rules leave some points open. This is how they are implemented; most are a one-line change in the migration.
 
 - **Range is counted in up/down/left/right steps, never diagonally** (Manhattan distance), so it covers a diamond around you. With range 2 you can reach a player 2 squares straight up, or 1 across and 1 up, but not one 2 squares diagonally (that's 4 steps). Movement is likewise up, down, left or right only.
-- **Days follow the host's chosen time zone.** Each day runs from midnight to midnight, and its two AP drops land at random times between 8am and 8pm. If the game starts after 8pm, day 1 is the next day.
+- **The host configures the game in the lobby.** Until the game starts, the host can set:
+
+  | Setting | Range | Default |
+  |---|---|---|
+  | Grid size | 10×10 to 20×20 | 15×15 |
+  | Max players | 4 to 25 (not below the number already joined) | 10 |
+  | Max hearts | 1 to 10 | 4 |
+  | AP drops per day | 1 to 12 | 2 |
+  | AP window | any start and end time on the same day | 8am–8pm |
+  | Time zone | any | the host's browser |
+
+  Everyone else sees the saved settings update live. Players start with 3 hearts, or the max if it's lower.
+- **Days follow the game's time zone.** Each day runs from midnight to midnight, and its AP drops land at random times inside the window. If the game starts after the window has closed for the day, day 1 is the next day. The window can't cross midnight.
 - **Dead players get no AP drops.** They still occupy their square, so nobody can move onto it.
-- **Gifts are free and unannounced.** The hearts or AP you send are the cost. You must keep at least 1 heart, AP can't be sent to the dead, reviving takes exactly 1 heart, and gifts can't take anyone above 4 hearts. (A refused heart gift does tell the giver the receiver is near the cap.)
+- **Gifts are free and anonymous.** The receiver is told what they got, never who sent it. The hearts or AP you send are the cost. You must keep at least 1 heart, AP can't be sent to the dead, reviving takes exactly 1 heart, and gifts can't take anyone above the game's max hearts. (A refused heart gift does tell the giver the receiver is near the cap.)
 - **Stats are secret.** You see only your own hearts, AP and range. Everyone sees positions, moves, who is alive or dead, revives and AP drops. All stats are revealed when the game ends.
 - **Jury results are for the jury.** Only dead players can see who was haunted or got the bonus. The affected player is told privately: the bonus player when it's awarded, the haunted player at each AP drop they miss.
 - **Jury votes are daily.** The dead vote during the day and votes are tallied at midnight. The *haunted* player gets no AP drops the **next** day. The *bonus* player gets +2 AP straight away. Only votes from players who are still dead at the tally count. Ties are broken at random.
 - **The finale starts** as soon as only 3 players are alive, or when day 5 ends. All actions freeze. Survivors write a plea, and the jury votes for a winner. The finale ends when every juror has voted, or after 24 hours.
 - **A tied winner vote is a shared victory.** If the jury is empty or nobody voted, all survivors share the win.
-- **Games need at least 4 players to start.** With 3 players or fewer, the finale would begin immediately. The host picks the maximum, from 4 to 20.
+- **Games need at least 4 players to start.** With 3 players or fewer, the finale would begin immediately. The host picks the maximum, from 4 to 25.
 
 ## Testing
 
-`supabase/tests/game_test.sql` plays a full game as five users and checks 77 rules, including the RLS restrictions. It runs against a **throwaway** plain Postgres 15+ database, with stand-ins for Supabase's `auth` schema and roles:
+`supabase/tests/game_test.sql` plays a full game as five users, plus a second game to check the host settings, and checks 90 rules, including the RLS restrictions. It runs against a **throwaway** plain Postgres 15+ database, with stand-ins for Supabase's `auth` schema and roles:
 
 ```sh
 PGHOST=localhost PGUSER=postgres PGDATABASE=scratch supabase/tests/run-local.sh

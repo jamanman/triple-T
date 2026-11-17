@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { rpc } from '../lib/supabase'
 import { useGame, useNow } from '../lib/useGame'
-import { countdown } from '../lib/util'
+import { countdown, dropSchedule } from '../lib/util'
 import { goTo, signOut } from '../App'
 import Lobby from './Lobby'
 import Board, { type Cell } from './Board'
@@ -85,7 +85,7 @@ export default function GameScreen({ gameId, userId }: { gameId: string; userId:
         <section className="board-col">
           <Board game={game} players={players} me={me} selected={selected} onSelect={setSelected} />
           <p className="muted small hint">
-            AP drops twice a day at random between 8am and 8pm ({game.timezone}). Range counts up/down/left/right steps only.
+            {dropSchedule(game)}. Range counts up/down/left/right steps only.
           </p>
         </section>
 

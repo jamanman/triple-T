@@ -1,11 +1,12 @@
 import type { Player } from './types'
 
-// 20 visually distinct colours, one per player slot.
+// 25 visually distinct colours, one per player slot.
 export const PLAYER_COLORS = [
   '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
   '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4',
   '#469990', '#dcbeff', '#9a6324', '#fffac8', '#800000',
   '#aaffc3', '#808000', '#ffd8b1', '#000075', '#ffffff',
+  '#2e8b57', '#b8860b', '#c71585', '#87ceeb', '#556b2f',
 ]
 
 export function colorOf(p: Pick<Player, 'color'>): string {
@@ -43,6 +44,33 @@ export function timeAgo(iso: string, now: number): string {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`
   return `${Math.floor(s / 86400)}d ago`
+}
+
+export function browserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+}
+
+export function allTimeZones(current: string): string[] {
+  try {
+    const zones = (Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf('timeZone')
+    return zones.includes(current) ? zones : [current, ...zones]
+  } catch {
+    return [current]
+  }
+}
+
+/** '08:00:00' -> '8am', '17:30:00' -> '5:30pm' */
+export function clock(t: string): string {
+  const [h, m] = t.split(':').map(Number)
+  const suffix = h < 12 ? 'am' : 'pm'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return m ? `${h12}:${String(m).padStart(2, '0')}${suffix}` : `${h12}${suffix}`
+}
+
+export function dropSchedule(g: { ap_drops_per_day: number; ap_window_start: string; ap_window_end: string; timezone: string }): string {
+  const n = g.ap_drops_per_day
+  const times = n === 1 ? 'once a day' : n === 2 ? 'twice a day' : `${n} times a day`
+  return `AP drops ${times} at random between ${clock(g.ap_window_start)} and ${clock(g.ap_window_end)} (${g.timezone})`
 }
 
 export function plural(n: number, word: string): string {

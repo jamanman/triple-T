@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { rpc, supabase } from '../lib/supabase'
 import type { Game } from '../lib/types'
+import { browserTimeZone } from '../lib/util'
 import { goTo, signOut } from '../App'
-
 
 const STATUS_LABEL: Record<Game['status'], string> = {
   lobby: 'In lobby', active: 'In progress', finale: 'Jury deciding', finished: 'Finished',
@@ -12,8 +12,6 @@ interface Props { initialCode?: string; email: string; displayName: string }
 
 export default function Home({ initialCode, email, displayName }: Props) {
   const [name, setName] = useState(displayName)
-  const [maxPlayers, setMaxPlayers] = useState(10)
-  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
   const [code, setCode] = useState(initialCode ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,11 +23,6 @@ export default function Home({ initialCode, email, displayName }: Props) {
       .then(({ data }) => setGames((data as Game[]) ?? []))
   }, [])
 
-  const zones = (() => {
-    try { return (Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf('timeZone') }
-    catch { return [timezone] }
-  })()
-
   async function run(fn: () => Promise<string>) {
     if (!name.trim()) return setError('Pick a name first')
     setBusy(true); setError(null)
@@ -38,7 +31,7 @@ export default function Home({ initialCode, email, displayName }: Props) {
 
   const create = (e: FormEvent) => {
     e.preventDefault()
-    run(() => rpc<string>('create_game', { p_name: name, p_max_players: maxPlayers, p_timezone: timezone }))
+    run(() => rpc<string>('create_game', { p_name: name, p_max_players: 10, p_timezone: browserTimeZone() }))
   }
   const join = (e: FormEvent) => {
     e.preventDefault()
@@ -54,7 +47,7 @@ export default function Home({ initialCode, email, displayName }: Props) {
       </div>
       <header className="hero">
         <h1>Triple-T</h1>
-        <p className="muted">A slow-burn battle on a 15×15 grid. Five days. Two AP drops a day. The dead decide who wins.</p>
+        <p className="muted">A slow-burn battle on a grid. Five days. AP drops at random times. The dead decide who wins.</p>
       </header>
 
       <div className="card">
@@ -67,16 +60,7 @@ export default function Home({ initialCode, email, displayName }: Props) {
       <div className="home-grid">
         <form className="card" onSubmit={create}>
           <h2>Create a lobby</h2>
-          <label className="field">
-            <span>Max players: <strong>{maxPlayers}</strong></span>
-            <input type="range" min={4} max={20} value={maxPlayers} onChange={(e) => setMaxPlayers(+e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Time zone for AP drops (8am–8pm)</span>
-            <select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-              {zones.map((z) => <option key={z}>{z}</option>)}
-            </select>
-          </label>
+          <p className="muted small">You'll choose the grid size, player limit, max hearts and AP schedule in the lobby before starting.</p>
           <button className="primary" disabled={busy}>Create lobby</button>
         </form>
 
@@ -112,13 +96,13 @@ export default function Home({ initialCode, email, displayName }: Props) {
       <details className="card rules">
         <summary>Rules</summary>
         <ul>
-          <li>Everyone starts on a random square with 3 hearts, 0 AP and a range of 2. Your hearts, AP and range are secret: nobody else can see them until the game ends.</li>
-          <li>Twice a day, at random times between 8am and 8pm, every living player gets 1 AP.</li>
-          <li>At any time, spend AP to: <b>move</b> one square up/down/left/right (1 AP), <b>shoot</b> someone in range (1 AP, −1 heart), <b>add a heart</b> (3 AP, max 4), or <b>upgrade range</b> by 1 (3 AP).</li>
+          <li>Everyone starts on a random square of the grid (15×15 by default) with 3 hearts, 0 AP and a range of 2. Your hearts, AP and range are secret: nobody else can see them until the game ends.</li>
+          <li>Several times a day, at random times inside a window, every living player gets 1 AP. The host sets how many drops and the window (8am–8pm, twice a day, by default).</li>
+          <li>At any time, spend AP to: <b>move</b> one square up/down/left/right (1 AP), <b>shoot</b> someone in range (1 AP, −1 heart), <b>add a heart</b> (3 AP, up to the game's max, 4 by default), or <b>upgrade range</b> by 1 (3 AP).</li>
           <li>Range is counted in up/down/left/right steps, never diagonally. Range 2 reaches a square 2 steps away, or one step across and one step up.</li>
-          <li>Send hearts or AP as gifts to anyone in range (gifts can't take anyone above 4 hearts). A heart sent to a dead player revives them with 1 heart and 0 AP.</li>
+          <li>Send hearts or AP as gifts to anyone in range (gifts can't take anyone above the max hearts). A heart sent to a dead player revives them with 1 heart and 0 AP.</li>
           <li>At 0 hearts you're dead: your AP goes to your killer and your body stays on the board.</li>
-          <li>The activity feed shows AP drops, moves, deaths and revives. If you're shot, only you are told, and never by whom.</li>
+          <li>The activity feed shows AP drops, moves, deaths and revives. If you're shot or sent a gift, only you are told, and never by whom.</li>
           <li>The dead form the jury. Each day they vote to <b>haunt</b> one player (no AP the next day) and to give one player <b>+2 AP</b>.</li>
           <li>When 3 players remain, or after day 5, survivors plead their case and the jury votes for the winner.</li>
         </ul>
